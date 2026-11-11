@@ -1,0 +1,1712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Simple Mind Map</title>
+<meta name="theme-color" content="#F4F4F1">
+<meta name="description" content="A simple, offline-first mind map editor. Runs entirely in your browser.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#F4F4F1;--surf:#fff;--ink:#1D2125;--mut:#5B636B;--line:#E2E1DC;--line2:#CFCEC7;--acc:#0B57D0;--accink:#fff;--hov:#EEEDE8;--sel:#E3ECFB;--danger:#B42318;--grid:#D6D5CE;--map:#FBFBF9;--shadow:0 8px 24px rgba(0,0,0,.18);color-scheme:light}
+html[data-theme=dark]{--bg:#16181A;--surf:#1F2225;--ink:#E8EAEC;--mut:#A3AAB1;--line:#2E3338;--line2:#3C4248;--acc:#7AA7FF;--accink:#0B1220;--hov:#2A2E32;--sel:#24344F;--danger:#FF8A80;--grid:#2A2D30;--map:#1A1D1F;--shadow:0 8px 24px rgba(0,0,0,.5);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);overflow:hidden;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+svg{display:block}
+#app{height:100%;width:100%;max-width:100vw;overflow:hidden;display:flex;flex-direction:column}
+html,body{overflow-x:hidden;max-width:100vw}
+#top,#bar{min-width:0;max-width:100%}
+.row{display:flex;align-items:center;gap:8px}
+.grow{flex:1;min-width:0}
+.mut{color:var(--mut)}
+.small{font-size:12px}
+.btn{height:36px;padding:0 12px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--hov)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--accink);font-weight:600}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.dng{color:var(--danger)}
+.btn.sm{height:30px;padding:0 10px;font-size:12px}
+.ib{width:36px;height:36px;border:1px solid transparent;border-radius:8px;background:transparent;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.ib:hover{background:var(--hov)}
+.ib.bd{border-color:var(--line2);background:var(--surf)}
+.ib[disabled],.btn[disabled]{opacity:.4;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--surf)}
+.seg button{height:34px;min-width:36px;padding:0 10px;border:0;border-right:1px solid var(--line2);background:transparent;font-size:13px;font-weight:500}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg);font-weight:600}
+.lbl{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+#top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surf);border-bottom:1px solid var(--line);flex-wrap:wrap}
+#title{height:36px;min-width:120px;max-width:300px;flex:1 1 160px;border:1px solid transparent;border-radius:8px;background:transparent;padding:0 8px;font-size:16px;font-weight:600}
+#title:hover{border-color:var(--line2)}
+.search{display:flex;align-items:center;gap:8px;height:36px;flex:1 1 200px;max-width:380px;padding:0 10px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);color:var(--mut)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink)}
+#syncChip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);margin-left:auto;white-space:nowrap}
+#syncChip i{width:8px;height:8px;border-radius:50%;background:#1E7A47;flex:none}
+#syncChip.warn i{background:#A86A00}
+#syncChip.err i{background:var(--danger)}
+#syncChip.busy i{background:var(--acc)}
+#bar{display:flex;align-items:center;gap:8px 16px;padding:6px 12px;background:var(--surf);border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap;scrollbar-width:thin}
+#bar>*{flex:none}
+#bar select{height:34px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);padding:0 8px;font-size:13px}
+#body{flex:1;min-height:0;min-width:0;display:flex;position:relative;overflow:hidden}
+#outline,#insp{flex:none;width:272px;background:var(--surf);overflow:auto;display:flex;flex-direction:column}
+#outline{border-right:1px solid var(--line)}
+#insp{border-left:1px solid var(--line);width:296px}
+body.noOutline #outline,body.noInsp #insp{display:none}
+.phead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px;position:sticky;top:0;background:var(--surf);z-index:1}
+#otree{padding-bottom:24px}
+.orow{display:flex;align-items:center;gap:6px;min-height:34px;padding:2px 10px 2px 8px;border-left:3px solid transparent;cursor:pointer;font-size:13px}
+.orow:hover{background:var(--hov)}
+.orow[aria-selected=true]{background:var(--sel);border-left-color:var(--acc);font-weight:600}
+.orow .chev{width:22px;height:22px;border:0;background:transparent;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--mut);flex:none}
+.orow .chev.col svg{transform:rotate(-90deg)}
+.orow .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.orow .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orow .done{text-decoration:line-through;color:var(--mut)}
+.pill{font-size:11px;font-weight:500;color:var(--mut);border:1px solid var(--line2);border-radius:999px;padding:0 7px;line-height:18px;flex:none}
+mark{background:#FFE08A;color:#1D2125;border-radius:2px}
+#stage{flex:1;min-width:0;position:relative;background:var(--map);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:24px 24px;overflow:hidden}
+#svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+#svg.pan{cursor:grabbing}
+#svg text{pointer-events:none}
+.drop .main{stroke:var(--acc)!important;stroke-width:3!important;stroke-dasharray:5 3}
+#crumb{position:absolute;left:12px;top:12px;max-width:60%;display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;border-radius:999px;background:var(--surf);border:1px solid var(--line);font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden}
+#crumb span{overflow:hidden;text-overflow:ellipsis}
+#zoom{position:absolute;right:12px;bottom:12px;display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--surf)}
+#zoom button{width:38px;height:38px;border:0;border-right:1px solid var(--line);background:transparent;display:inline-flex;align-items:center;justify-content:center}
+#zoom button:last-child{border-right:0}
+#zoom .zv{width:auto;min-width:52px;font-size:12px;font-weight:600}
+#mini{position:absolute;right:12px;bottom:62px;width:150px;height:96px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);cursor:pointer}
+#hint{position:absolute;left:12px;bottom:12px;padding:6px 10px;border-radius:8px;background:var(--surf);border:1px solid var(--line);font-size:12px;color:var(--mut);max-width:calc(100% - 230px)}
+#ed{position:absolute;z-index:5;display:none;resize:none;border:2px solid var(--acc);border-radius:8px;padding:6px 12px;line-height:18px;overflow:hidden;outline:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:var(--shadow)}
+#insp .sec{padding:4px 14px 12px}
+#insp label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:12px 0 4px}
+#insp input[type=text],#insp input[type=date],#insp textarea,#insp select{width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--bg);padding:7px 10px;min-height:36px}
+#insp textarea{min-height:96px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 4px 0 10px;border-radius:999px;background:var(--hov);font-size:12px;font-weight:500}
+.chip button{border:0;background:transparent;width:22px;height:22px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
+.sw{display:flex;gap:8px;flex-wrap:wrap}
+.sw button{width:30px;height:30px;border-radius:50%;border:2px solid;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.sw button[aria-pressed=true]{box-shadow:0 0 0 2px var(--surf),0 0 0 4px var(--acc)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.acts .btn{justify-content:center}
+kbd{font:inherit;font-size:11px;padding:1px 6px;border-radius:4px;background:var(--hov);border:1px solid var(--line)}
+#dock{display:none}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;display:none;align-items:center;gap:12px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;box-shadow:var(--shadow);max-width:90vw;font-size:13px}
+#toast button{background:transparent;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:0}
+dialog{border:1px solid var(--line2);border-radius:14px;background:var(--surf);color:var(--ink);padding:0;width:min(560px,94vw);max-height:90vh;box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .dh{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surf);z-index:1}
+dialog .dh h2{margin:0;font-size:16px}
+dialog .db{padding:14px 18px;overflow:auto;max-height:calc(90vh - 120px)}
+dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.list>*{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.grp{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;padding:14px 0 4px}
+.note{padding:10px 12px;border-radius:8px;background:var(--sel);font-size:13px;margin-bottom:10px}
+.field{display:block;margin:10px 0 4px;font-size:12px;font-weight:600;color:var(--mut)}
+.in{width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--bg);padding:8px 10px;min-height:38px}
+textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+#pop{position:fixed;z-index:70;min-width:200px;max-width:300px;background:var(--surf);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:6px;display:none}
+#pop button{width:100%;display:flex;align-items:center;gap:10px;justify-content:space-between;text-align:left;border:0;background:transparent;border-radius:6px;padding:8px 10px;min-height:36px}
+#pop button:hover,#pop button:focus-visible{background:var(--hov)}
+#pop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#pal .db{padding:10px}
+#pal input{width:100%}
+#pal .res button{width:100%;display:flex;justify-content:space-between;align-items:center;border:0;background:transparent;border-radius:6px;padding:8px 10px;min-height:38px;text-align:left}
+#pal .res button.on{background:var(--sel)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
+.srow input[type=checkbox]{width:18px;height:18px}
+@media (max-width:860px){
+  #outline,#insp{position:absolute;top:0;bottom:0;z-index:20;width:min(320px,88vw);box-shadow:var(--shadow);transform:translateX(-105%);transition:transform .2s;display:flex!important}
+  #insp{right:0;left:auto;transform:translateX(105%)}
+  #outline.open,#insp.open{transform:none}
+  #mini,#hint{display:none}
+  #dock{display:flex;background:var(--surf);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  #dock button{flex:1;height:56px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600}
+  #zoom{bottom:12px}
+  #toast{bottom:84px}
+  #syncChip{margin-left:0}
+  #btnTogO,#btnTogI{display:none}
+  .search{max-width:none;flex:1 1 100%;order:5}
+  #title{min-width:0;flex:1 1 0}
+}
+@media (prefers-reduced-motion:reduce){#outline,#insp{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <button class="ib" id="btnMaps" aria-label="Open maps" data-ic="menu"></button>
+    <input id="title" aria-label="Map title" autocomplete="off">
+    <label class="search"><span data-ic="search" data-s="16"></span><input id="q" type="search" placeholder="Search nodes" aria-label="Search nodes" autocomplete="off"><span id="qcount" class="small"></span></label>
+    <div id="syncChip" role="status"><i></i><span></span></div>
+    <button class="btn" id="btnVersions"><span data-ic="history" data-s="16"></span><span class="lt">Versions</span></button>
+    <button class="btn" id="btnExport"><span data-ic="download" data-s="16"></span><span class="lt">Export</span></button>
+    <button class="ib bd" id="btnMore" aria-label="More" data-ic="more"></button>
+  </header>
+  <div id="bar">
+    <span class="lbl">Levels</span>
+    <div class="seg" id="lvl" role="group" aria-label="Level filter"></div>
+    <span class="lbl">Layout</span>
+    <div class="seg" id="lay" role="group" aria-label="Layout"><button data-v="both">Both sides</button><button data-v="right">Right</button></div>
+    <select id="tagSel" aria-label="Filter by tag"></select>
+    <button class="ib bd" id="btnUndo" aria-label="Undo" data-ic="undo"></button>
+    <button class="ib bd" id="btnRedo" aria-label="Redo" data-ic="redo"></button>
+    <button class="btn" id="btnExpand">Expand all</button>
+    <button class="btn" id="btnCollapse">Collapse all</button>
+    <button class="btn" id="btnFocus"><span data-ic="target" data-s="16"></span>Focus branch</button>
+    <button class="ib bd" id="btnTogO" aria-label="Show or hide outline" data-ic="list"></button>
+    <button class="ib bd" id="btnTogI" aria-label="Show or hide details" data-ic="sliders"></button>
+  </div>
+  <div id="body">
+    <aside id="outline" aria-label="Outline"><div class="phead"><span class="lbl">Outline</span><button class="ib" id="btnOutlineX" aria-label="Hide outline" data-ic="close" data-s="16"></button></div><div id="otree" role="tree"></div></aside>
+    <main id="stage" aria-label="Mind map canvas">
+      <svg id="svg" role="application" aria-label="Mind map"><g id="vp"></g></svg>
+      <div id="crumb"></div>
+      <textarea id="ed" aria-label="Edit node text" rows="1"></textarea>
+      <canvas id="mini" width="300" height="192" aria-hidden="true"></canvas>
+      <div id="hint">Tab child · Enter sibling · F2 edit · Space collapse · Ctrl+K commands</div>
+      <div id="zoom"><button id="zOut" aria-label="Zoom out" data-ic="minus" data-s="16"></button><button id="zVal" class="zv" aria-label="Reset zoom">100%</button><button id="zIn" aria-label="Zoom in" data-ic="plus" data-s="16"></button><button id="zFit" aria-label="Fit to screen" data-ic="fit" data-s="16"></button></div>
+    </main>
+    <aside id="insp" aria-label="Node details"><div class="phead"><span class="lbl">Details</span><button class="ib" id="btnInspX" aria-label="Hide details" data-ic="close" data-s="16"></button></div><div id="inspBody"></div></aside>
+  </div>
+  <nav id="dock" aria-label="Quick actions">
+    <button id="dMaps"><span data-ic="menu"></span>Maps</button>
+    <button id="dOutline"><span data-ic="list"></span>Outline</button>
+    <button id="dChild"><span data-ic="plus"></span>Child</button>
+    <button id="dSib"><span data-ic="sibling"></span>Sibling</button>
+    <button id="dInsp"><span data-ic="sliders"></span>Details</button>
+  </nav>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="pop" role="menu"></div>
+<dialog id="dlg"></dialog>
+<dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
+
+<script>
+'use strict';
+/* ============================================================
+   Simple Mind Map: single-file, offline-first, no build step.
+   Sections: utils, model, layout, render, interaction, storage,
+   versions, import/export, zip, dropbox, ui.
+   ============================================================ */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const debounce=(fn,ms)=>{let t;const f=(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)};f.now=(...a)=>{clearTimeout(t);fn(...a)};f.cancel=()=>clearTimeout(t);return f};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const FONT="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+const ICONS={
+ menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+ undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+ redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+ history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+ download:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
+ upload:'<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 20h16"/>',
+ archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9"/><path d="M10 13h4"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ minus:'<path d="M5 12h14"/>',
+ fit:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+ target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+ more:'<circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/>',
+ close:'<path d="M6 6l12 12M18 6L6 18"/>',
+ trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+ list:'<path d="M8 6h12M12 12h8M12 18h8M4 6h.01M8 12h.01M8 18h.01"/>',
+ sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+ sibling:'<path d="M5 5v14"/><path d="M5 12h8"/><path d="M13 8v8"/><path d="M13 8h6M13 16h6"/>',
+ note:'<path d="M5 4h11l3 3v13H5z"/><path d="M9 11h6M9 15h6"/>',
+ check:'<path d="M5 12l5 5 9-10"/>',
+ chevron:'<path d="M6 9l6 6 6-6"/>',
+ copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+ edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+ star:'<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>',
+ cloud:'<path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19 11a3.5 3.5 0 0 1-1 7z"/>',
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+ help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7"/><path d="M12 17h.01"/>',
+ up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+ down:'<path d="M12 5v14M6 13l6 6 6-6"/>'
+};
+const ic=(n,s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]||''}</svg>`;
+function hydrateIcons(root=document){$$('[data-ic]',root).forEach(el=>{el.innerHTML=ic(el.dataset.ic,+(el.dataset.s||18))+(el.dataset.lbl?'':'')})}
+
+/* Node colors. index 0-7; root uses ink. */
+const PAL={
+ light:{ink:'#1D2125',mut:'#5B636B',surf:'#FFFFFF',acc:'#0B57D0',danger:'#B42318',rootBg:'#1D2125',rootFg:'#FFFFFF',
+  c:[['#DCE6FF','#2F55B5'],['#FFEBC7','#A86A00'],['#D4F0E0','#1E7A47'],['#E8DFFB','#6A45C2'],['#FFDADA','#B42318'],['#CFF0F0','#0E7C7B'],['#FFD9EC','#B0246B'],['#E6E6E0','#5B636B']]},
+ dark:{ink:'#E8EAEC',mut:'#A3AAB1',surf:'#1F2225',acc:'#7AA7FF',danger:'#FF8A80',rootBg:'#E8EAEC',rootFg:'#16181A',
+  c:[['#243558','#7AA7FF'],['#4A3512','#F2B84B'],['#16402A','#5CD08F'],['#34285A','#B79CFF'],['#4D2222','#FF8A80'],['#123F3F','#4FD1D0'],['#4D2140','#FF8CC8'],['#33373B','#A3AAB1']]}
+};
+const COLOR_NAMES=['Blue','Amber','Green','Purple','Red','Teal','Pink','Gray'];
+const curTheme=()=>document.documentElement.dataset.theme==='dark'?'dark':'light';
+
+/* ---------------- state ---------------- */
+const S={
+ map:null, idx:new Map(), sel:null, level:null, layout:'both', q:'', tag:'', focus:null,
+ view:{x:0,y:0,k:1}, editing:null, undo:[], redo:[], lay:null, clip:null,
+ maps:[], set:{theme:'auto',dbxKey:'',autoSync:true,autoBackup:false,lastBackup:0,outline:true,insp:true},
+ sync:{state:'off',msg:'',last:0}, lastSnap:null, matches:[], matchPos:-1, lastNewId:null
+};
+
+/* ---------------- model ---------------- */
+const newNode=(t='')=>({id:uid(),t,c:[]});
+const mkMap=(title='Untitled map',root)=>({smm:1,id:uid(),title,created:Date.now(),updated:Date.now(),root:root||newNode('Central idea'),view:null});
+function buildIndex(){
+  S.idx=new Map();
+  (function w(n,p,i,d){S.idx.set(n.id,{n,p,i,d});n.c.forEach((c,j)=>w(c,n,j,d+1))})(S.map.root,null,0,0);
+}
+const N=id=>S.idx.get(id);
+const countNodes=n=>1+n.c.reduce((a,c)=>a+countNodes(c),0);
+const countDesc=n=>n.c.reduce((a,c)=>a+countNodes(c),0);
+const isAnc=(a,b)=>{let x=N(b);while(x){if(x.n.id===a)return true;x=x.p?N(x.p.id):null}return false}; // is a ancestor-or-self of b
+function pathTo(id){const out=[];let x=N(id);while(x){out.unshift(x.n);x=x.p?N(x.p.id):null}return out}
+function cloneTree(n,fresh=true){return {...structuredClone({...n,c:undefined}),id:fresh?uid():n.id,c:n.c.map(c=>cloneTree(c,fresh))}}
+function walk(n,fn,d=0,p=null){fn(n,d,p);n.c.forEach(c=>walk(c,fn,d+1,n))}
+function taskProgress(n){let done=0,total=0;(function w(x,top){if(!top&&x.k!==undefined){total++;if(x.k)done++}x.c.forEach(c=>w(c,false))})(n,true);return total?{done,total}:null}
+function allTags(){const s=new Set();walk(S.map.root,n=>(n.tg||[]).forEach(t=>s.add(t)));return [...s].sort()}
+const maxDepth=()=>{let m=0;walk(S.map.root,(n,d)=>{m=Math.max(m,d)});return m};
+
+/* Every change to the map goes through commit() so undo, autosave and render stay in step. */
+function snapState(){return JSON.stringify({t:S.map.title,r:S.map.root})}
+let lastCommit={key:null,ts:0};
+function commit(fn,o={}){
+  const before=snapState();
+  const merge=o.merge||(o.key&&lastCommit.key===o.key&&Date.now()-lastCommit.ts<1500);
+  fn();
+  if(snapState()===before)return false;
+  if(!merge){S.undo.push(before);if(S.undo.length>200)S.undo.shift();S.redo=[]}
+  lastCommit={key:o.key||null,ts:Date.now()};
+  touch();render();return true;
+}
+function restoreState(str){const o=JSON.parse(str);S.map.title=o.t;S.map.root=o.r;buildIndex();if(S.sel&&!N(S.sel))S.sel=S.map.root.id;if(S.focus&&!N(S.focus))S.focus=null;touch();render()}
+function undo(){if(!S.undo.length)return;S.redo.push(snapState());restoreState(S.undo.pop())}
+function redo(){if(!S.redo.length)return;S.undo.push(snapState());restoreState(S.redo.pop())}
+function touch(){S.map.updated=Date.now();S.map.lv=(S.map.lv||0)+1;saveSoon()}
+
+/* tree operations (call inside commit) */
+function opAddChild(id,text='',at=null){const x=N(id);const n=newNode(text);if(at==null)x.n.c.push(n);else x.n.c.splice(at,0,n);if(x.n.x===true||(S.level!=null&&x.d>=S.level))x.n.x=false;return n}
+function opAddSibling(id,before=false,text=''){const x=N(id);if(!x.p)return opAddChild(id,text);const n=newNode(text);x.p.c.splice(x.i+(before?0:1),0,n);return n}
+function opDelete(id){const x=N(id);if(!x.p)return;x.p.c.splice(x.i,1)}
+function opMove(id,newParentId,at=null){
+  const x=N(id),np=N(newParentId);if(!x.p||isAnc(id,newParentId))return false;
+  x.p.c.splice(x.i,1);
+  if(at==null||at>np.n.c.length)np.n.c.push(x.n);else np.n.c.splice(at,0,x.n);
+  if(np.n.x===true)np.n.x=false;
+  return true;
+}
+function opReorder(id,dir){const x=N(id);if(!x.p)return false;const j=x.i+dir;if(j<0||j>=x.p.c.length)return false;const a=x.p.c;[a[x.i],a[j]]=[a[j],a[x.i]];return true}
+function opIndent(id){const x=N(id);if(!x.p||x.i===0)return false;const prev=x.p.c[x.i-1];x.p.c.splice(x.i,1);prev.c.push(x.n);if(prev.x===true)prev.x=false;return true}
+function opOutdent(id){const x=N(id);if(!x.p)return false;const pi=N(x.p.id);if(!pi.p)return false;x.p.c.splice(x.i,1);pi.p.c.splice(pi.i+1,0,x.n);return true}
+
+/* ---------------- layout ---------------- */
+const mctx=document.createElement('canvas').getContext('2d');
+const mcache=new Map();
+const tw=(s,wt,px=14)=>{mctx.font=`${wt} ${px}px ${FONT}`;return mctx.measureText(s).width};
+function wrapText(text,maxW,wt){
+  const out=[];
+  for(const para of String(text||'').split('\n')){
+    const words=para.split(/\s+/).filter(Boolean);
+    if(!words.length){out.push('');continue}
+    let cur='';
+    for(const w of words){const t=cur?cur+' '+w:w;if(cur&&tw(t,wt)>maxW){out.push(cur);cur=w}else cur=t}
+    out.push(cur);
+  }
+  return out.length?out:[''];
+}
+const fmtDue=d=>{try{return new Date(d+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch{return d}};
+const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function metaOf(n,prog){
+  const p=[];
+  if(n.p)p.push(['','!','!!','!!!'][n.p]);
+  if(n.d)p.push(fmtDue(n.d));
+  if(n.tg&&n.tg.length)p.push(n.tg.map(t=>'#'+t).join(' '));
+  if(prog)p.push(prog.done+'/'+prog.total+' done');
+  return p.join('  ·  ');
+}
+const VG=10,HG=44,HGR=60,PADX=14,PADY=8,LH=18;
+function sizeOf(n,d,prog){
+  const wt=d<=1?600:500,task=n.k!==undefined,meta=metaOf(n,prog);
+  const key=[n.t,wt,d===0,task,meta].join('\u0001');
+  let r=mcache.get(key);if(r)return r;
+  const maxW=d===0?240:210;
+  const lines=wrapText(n.t,maxW-(task?20:0),wt);
+  const tx=Math.max(...lines.map(l=>tw(l,wt)));
+  const mw=meta?tw(meta,500,12):0;
+  const w=Math.max(d===0?96:60,Math.ceil(Math.max(tx+(task?20:0),mw)+2*PADX));
+  const h=Math.max(d===0?44:34,lines.length*LH+(meta?15:0)+2*PADY);
+  r={lines,meta,w,h,task};mcache.set(key,r);if(mcache.size>4000)mcache.clear();
+  return r;
+}
+/* Returns positioned items. o: {level, mode:'both'|'right', full:true ignores collapse/level (for export)} */
+function computeLayout(root,o){
+  const L=o.full?Infinity:(o.level==null?Infinity:o.level);
+  const kidsVisible=(n,d)=>n.c.length>0&&(o.full||!(n.x===true||(n.x!==false&&d>=L)));
+  const items=[],edges=[],byId=new Map();
+  function build(n,d,ci){
+    const prog=n.c.length?taskProgress(n):null,sz=sizeOf(n,d,prog);
+    const it={n,d,ci,lines:sz.lines,meta:sz.meta,task:sz.task,w:sz.w,h:sz.h,kids:[],hidden:0,hasKids:n.c.length>0,sub:0,x:0,y:0,dir:1,prog};
+    if(n.c.length){
+      if(kidsVisible(n,d))n.c.forEach((c,i)=>it.kids.push(build(c,d+1,c.col!=null?c.col:(d===0?i%7:ci))));
+      else it.hidden=countDesc(n);
+    }
+    const tot=it.kids.reduce((a,k)=>a+k.sub,0)+Math.max(0,it.kids.length-1)*VG;
+    it.sub=Math.max(it.h,tot);
+    return it;
+  }
+  function place(it,edge,cy,dir){
+    it.dir=dir;it.x=dir>0?edge:edge-it.w;it.y=cy-it.h/2;items.push(it);byId.set(it.n.id,it);
+    if(!it.kids.length)return;
+    const tot=it.kids.reduce((a,k)=>a+k.sub,0)+(it.kids.length-1)*VG;
+    let top=cy-tot/2;
+    for(const k of it.kids){place(k,dir>0?it.x+it.w+HG:it.x-HG,top+k.sub/2,dir);edges.push({a:it,b:k});top+=k.sub+VG}
+  }
+  const r=build(root,0,-1);
+  r.dir=0;r.x=-r.w/2;r.y=-r.h/2;items.push(r);byId.set(root.id,r);
+  let right=r.kids,left=[];
+  if(o.mode==='both'&&r.kids.length>1){
+    const hs=r.kids.map(k=>k.sub),total=hs.reduce((a,b)=>a+b,0);
+    let best=1,bd=Infinity,acc=0;
+    for(let k=1;k<=hs.length;k++){acc+=hs[k-1];const diff=Math.abs(acc-(total-acc));if(diff<=bd){bd=diff;best=k}}
+    right=r.kids.slice(0,best);left=r.kids.slice(best);
+  }
+  const group=(g,dir)=>{
+    if(!g.length)return;
+    const tot=g.reduce((a,k)=>a+k.sub,0)+(g.length-1)*VG;
+    let top=-tot/2;
+    for(const k of g){place(k,dir>0?r.x+r.w+HGR:r.x-HGR,top+k.sub/2,dir);edges.push({a:r,b:k});top+=k.sub+VG}
+  };
+  group(right,1);group(left,-1);
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const it of items){x0=Math.min(x0,it.x);y0=Math.min(y0,it.y);x1=Math.max(x1,it.x+it.w);y1=Math.max(y1,it.y+it.h)}
+  const M=36;x0-=M;y0-=M;x1+=M;y1+=M;
+  return {items,edges,byId,bbox:{x:x0,y:y0,w:x1-x0,h:y1-y0},root:r};
+}
+function edgePath(a,b){
+  const sy=a.y+a.h/2,ey=b.y+b.h/2;
+  const sx=b.dir>=0?a.x+a.w:a.x,ex=b.dir>=0?b.x:b.x+b.w,mx=(sx+ex)/2;
+  return `M${sx} ${sy}C${mx} ${sy},${mx} ${ey},${ex} ${ey}`;
+}
+
+/* ---------------- SVG rendering ---------------- */
+function nodeSVG(it,P,o){
+  const n=it.n,root=it.d===0,[bg,bd]=root?[P.rootBg,P.rootBg]:P.c[it.ci%8];
+  const fg=root?P.rootFg:P.ink,done=n.k===true;
+  const sel=o.sel===n.id,m=o.matches&&o.matches.has(n.id),dim=o.keep&&!o.keep.has(n.id);
+  const wt=it.d<=1?600:500,rx=root?it.h/2:8;
+  let s=`<g class="nd" data-id="${n.id}" transform="translate(${it.x},${it.y})"${dim?' opacity=".28"':''}>`;
+  if(sel)s+=`<rect x="-4" y="-4" width="${it.w+8}" height="${it.h+8}" rx="${rx+4}" fill="none" stroke="${P.acc}" stroke-width="2.5"/>`;
+  if(m)s+=`<rect x="-3" y="-3" width="${it.w+6}" height="${it.h+6}" rx="${rx+3}" fill="none" stroke="#E0A800" stroke-width="3"/>`;
+  s+=`<rect class="main" width="${it.w}" height="${it.h}" rx="${rx}" fill="${bg}" stroke="${bd}" stroke-width="1.5"/>`;
+  let tx=PADX;
+  if(it.task){
+    const cy=(it.h-14)/2;
+    s+=`<g data-chk="${n.id}" style="cursor:pointer"><rect x="${PADX-2}" y="${cy}" width="14" height="14" rx="3" fill="${P.surf}" stroke="${fg}" stroke-width="1.5"/>`+(done?`<path d="M${PADX+1} ${cy+7}l3.5 3.5 6-7" fill="none" stroke="${fg}" stroke-width="2"/>`:'')+`</g>`;
+    tx+=20;
+  }
+  const rootCenter=root&&!it.task;
+  if(!(o.hideTextFor===n.id)){
+    const ty=PADY+13;
+    s+=`<text font-family="${FONT}" font-size="14" font-weight="${wt}" fill="${done?P.mut:fg}"${done?' text-decoration="line-through"':''}${rootCenter?` text-anchor="middle"`:''} style="white-space:pre">`;
+    it.lines.forEach((l,i)=>{s+=`<tspan x="${rootCenter?it.w/2:tx}" y="${ty+i*LH}">${esc(l)}</tspan>`});
+    s+='</text>';
+    if(it.meta){
+      const over=n.d&&n.k!==true&&n.d<todayStr();
+      s+=`<text font-family="${FONT}" font-size="12" font-weight="500" fill="${over?P.danger:(root?P.rootFg:P.mut)}"${rootCenter?` text-anchor="middle"`:''} x="${rootCenter?it.w/2:tx}" y="${PADY+it.lines.length*LH+10}">${esc(it.meta)}${over?' (overdue)':''}</text>`;
+    }
+  }
+  if(n.n&&!o.noUi)s+=`<path transform="translate(${it.w-14},3)" d="M1 0h6l3 3v7H1z" fill="none" stroke="${fg}" stroke-width="1.2" opacity=".6"/>`;
+  if(!o.noUi&&(it.hasKids)){
+    const hx=it.dir>=0?it.w:0,cy=it.h/2;
+    if(it.hidden>0){
+      const label='+'+it.hidden,pw=Math.max(26,label.length*7+14),px=it.dir>=0?it.w+4:-4-pw;
+      s+=`<g data-tog="${n.id}" style="cursor:pointer"><rect x="${px}" y="${cy-10}" width="${pw}" height="20" rx="10" fill="${P.surf}" stroke="${bd}" stroke-width="1.5"/><text x="${px+pw/2}" y="${cy+4}" text-anchor="middle" font-family="${FONT}" font-size="11" font-weight="700" fill="${P.ink}">${label}</text></g>`;
+    }else if(!root){
+      const cx=it.dir>=0?it.w+10:-10;
+      s+=`<g data-tog="${n.id}" style="cursor:pointer" opacity=".85"><circle cx="${cx}" cy="${cy}" r="8" fill="${P.surf}" stroke="${bd}" stroke-width="1.5"/><path d="M${cx-3.5} ${cy}h7" stroke="${bd}" stroke-width="1.8" stroke-linecap="round"/></g>`;
+    }
+  }
+  return s+'</g>';
+}
+function edgesSVG(lay,P,dimSet){
+  return lay.edges.map(e=>{
+    const col=P.c[e.b.ci%8][1],dim=dimSet&&!dimSet.has(e.b.n.id);
+    return `<path d="${edgePath(e.a,e.b)}" fill="none" stroke="${col}" stroke-width="${e.b.d===1?3:2}" stroke-linecap="round"${dim?' opacity=".28"':''}/>`;
+  }).join('');
+}
+function filterSets(){
+  const q=S.q.trim().toLowerCase(),tag=S.tag;
+  if(!q&&!tag)return {matches:null,keep:null,list:[]};
+  const matches=new Set(),keep=new Set(),list=[];
+  walk(S.map.root,n=>{
+    const tOk=!tag||(n.tg||[]).includes(tag);
+    const qOk=!q||n.t.toLowerCase().includes(q)||(n.n||'').toLowerCase().includes(q)||(n.tg||[]).some(t=>t.toLowerCase().includes(q));
+    if(tOk&&qOk){matches.add(n.id);list.push(n.id)}
+  });
+  for(const id of matches){keep.add(id);let x=N(id);while(x&&x.p){keep.add(x.p.id);x=N(x.p.id)}}
+  return {matches,keep,list};
+}
+function viewRoot(){return S.focus&&N(S.focus)?N(S.focus).n:S.map.root}
+function renderMap(){
+  const lay=S.lay=computeLayout(viewRoot(),{level:S.level,mode:S.layout});
+  const P=PAL[curTheme()],f=S.filt=filterSets();
+  const o={sel:S.sel,matches:f.matches,keep:f.keep,hideTextFor:S.editing&&S.editing.id};
+  $('#vp').innerHTML=edgesSVG(lay,P,f.keep)+lay.items.map(it=>nodeSVG(it,P,o)).join('');
+  S.matches=f.list;
+  $('#qcount').textContent=S.q.trim()?(f.list.length?(Math.max(S.matchPos,0)+1)+'/'+f.list.length:'0'):'';
+  applyView();drawMini();
+  if(S.editing)placeEditor();
+}
+function applyView(anim){
+  const vp=$('#vp');
+  vp.style.transition=anim?'transform .25s ease':'none';
+  vp.style.transform=`translate(${S.view.x}px,${S.view.y}px) scale(${S.view.k})`;
+  $('#zVal').textContent=Math.round(S.view.k*100)+'%';
+  drawMini();
+}
+const stageRect=()=>$('#stage').getBoundingClientRect();
+function fitView(anim){
+  if(!S.lay)return;
+  const r=stageRect(),b=S.lay.bbox;
+  const k=clamp(Math.min(r.width/b.w,r.height/b.h,1.2),0.12,2);
+  S.view={k,x:r.width/2-(b.x+b.w/2)*k,y:r.height/2-(b.y+b.h/2)*k};
+  applyView(anim);
+}
+function centerOn(id,anim=true){
+  const it=S.lay&&S.lay.byId.get(id);if(!it)return;
+  const r=stageRect(),k=S.view.k;
+  S.view.x=r.width/2-(it.x+it.w/2)*k;S.view.y=r.height/2-(it.y+it.h/2)*k;applyView(anim);
+}
+function ensureVisible(id){
+  const it=S.lay&&S.lay.byId.get(id);if(!it)return;
+  const r=stageRect(),k=S.view.k,m=50;
+  const x0=S.view.x+it.x*k,x1=S.view.x+(it.x+it.w)*k,y0=S.view.y+it.y*k,y1=S.view.y+(it.y+it.h)*k;
+  let dx=0,dy=0;
+  if(x0<m)dx=m-x0;else if(x1>r.width-m)dx=r.width-m-x1;
+  if(y0<m)dy=m-y0;else if(y1>r.height-m)dy=r.height-m-y1;
+  if(dx||dy){S.view.x+=dx;S.view.y+=dy;applyView(true)}
+}
+function zoomAt(f,cx,cy){
+  const r=stageRect();if(cx==null){cx=r.width/2;cy=r.height/2}
+  const k0=S.view.k,k=clamp(k0*f,0.12,3),s=k/k0;
+  S.view.x=cx-(cx-S.view.x)*s;S.view.y=cy-(cy-S.view.y)*s;S.view.k=k;applyView();
+}
+function drawMini(){
+  const cv=$('#mini');if(!cv||!S.lay||cv.offsetParent===null)return;
+  const g=cv.getContext('2d'),W=cv.width,H=cv.height,b=S.lay.bbox,P=PAL[curTheme()];
+  g.clearRect(0,0,W,H);
+  const sc=Math.min((W-16)/b.w,(H-16)/b.h),ox=(W-b.w*sc)/2-b.x*sc,oy=(H-b.h*sc)/2-b.y*sc;
+  S.miniT={sc,ox,oy};
+  for(const it of S.lay.items){g.fillStyle=it.d===0?P.rootBg:P.c[it.ci%8][1];g.fillRect(ox+it.x*sc,oy+it.y*sc,Math.max(3,it.w*sc),Math.max(2,it.h*sc*.6))}
+  const r=stageRect(),k=S.view.k;
+  g.strokeStyle=P.acc;g.lineWidth=3;
+  g.strokeRect(ox+(-S.view.x/k)*sc,oy+(-S.view.y/k)*sc,(r.width/k)*sc,(r.height/k)*sc);
+}
+
+/* ---------------- outline, inspector, bar ---------------- */
+const hl=(t,q)=>{if(!q)return esc(t);const i=t.toLowerCase().indexOf(q);if(i<0)return esc(t);return esc(t.slice(0,i))+'<mark>'+esc(t.slice(i,i+q.length))+'</mark>'+esc(t.slice(i+q.length))};
+function renderOutline(){
+  const vis=new Set(S.lay.items.map(i=>i.n.id)),f=S.filt,q=S.q.trim().toLowerCase(),P=PAL[curTheme()];
+  let h='';
+  (function w(n,d,ci){
+    if(f.keep&&!f.keep.has(n.id))return;
+    const col=d===0?P.rootBg:P.c[ci%8][1],sel=n.id===S.sel,collapsed=n.x===true&&n.c.length>0&&!f.keep;
+    h+=`<div class="orow" role="treeitem" data-id="${n.id}" aria-selected="${sel}" aria-level="${d+1}" style="padding-left:${6+d*16}px">`+
+      `<button class="chev${collapsed?' col':''}" data-tog="${n.id}" tabindex="-1" aria-label="Collapse or expand">${n.c.length?ic('chevron',14):''}</button>`+
+      `<span class="dot" style="background:${col}"></span>`+
+      `<span class="txt${n.k===true?' done':''}">${hl(n.t||'(empty)',q)}</span>`+
+      (n.d?`<span class="pill">${esc(fmtDue(n.d))}</span>`:'')+
+      (!vis.has(n.id)?'<span class="pill">hidden</span>':'')+`</div>`;
+    if(!collapsed)n.c.forEach((c,i)=>w(c,d+1,c.col!=null?c.col:(d===0?i%7:ci)));
+  })(S.map.root,0,-1);
+  $('#otree').innerHTML=h;
+  const cur=$('#otree [aria-selected=true]');if(cur)cur.scrollIntoView({block:'nearest'});
+}
+function renderInsp(){
+  const body=$('#inspBody'),x=N(S.sel);if(!x){body.innerHTML='';return}
+  const n=x.n,root=!x.p,P=PAL[curTheme()],prog=taskProgress(n);
+  const tags=(n.tg||[]).map(t=>`<span class="chip">${esc(t)}<button data-rmtag="${esc(t)}" aria-label="Remove tag ${esc(t)}">${ic('close',12)}</button></span>`).join('');
+  const sw=[`<button data-col="" aria-pressed="${n.col==null}" aria-label="Automatic color" style="border-color:var(--line2);background:var(--surf);font-size:11px;font-weight:700">A</button>`]
+    .concat(COLOR_NAMES.map((nm,i)=>`<button data-col="${i}" aria-pressed="${n.col===i}" aria-label="${nm}" style="border-color:${P.c[i][1]};background:${P.c[i][0]}"></button>`)).join('');
+  const pri=['None','Low (!)','Medium (!!)','High (!!!)'].map((l,i)=>`<option value="${i}"${(n.p||0)===i?' selected':''}>${l}</option>`).join('');
+  const nc=n.c.length;
+  body.innerHTML=`<div class="sec">
+   <div class="small mut">${root?'Root':'Level '+x.d} · ${nc} ${nc===1?'child':'children'}${prog?' · '+prog.done+'/'+prog.total+' tasks done':''}</div>
+   <label for="iText">Text</label><textarea id="iText" rows="2">${esc(n.t)}</textarea>
+   <label for="iNote">Note</label><textarea id="iNote" placeholder="Add a note">${esc(n.n||'')}</textarea>
+   <label for="iTag">Tags</label>
+   <div class="chips">${tags}</div>
+   <input type="text" id="iTag" list="tagList" placeholder="Add tag, press Enter" style="margin-top:6px" autocomplete="off">
+   <datalist id="tagList">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+   ${root?'':`<label>Branch color</label><div class="sw">${sw}</div>`}
+   <label>Task</label>
+   <div class="row" style="gap:18px">
+     <label class="row" style="margin:0"><input type="checkbox" id="iTask"${n.k!==undefined?' checked':''}> Task</label>
+     <label class="row" style="margin:0${n.k===undefined?';opacity:.45':''}"><input type="checkbox" id="iDone"${n.k===true?' checked':''}${n.k===undefined?' disabled':''}> Done</label>
+   </div>
+   <div class="row" style="align-items:flex-start;gap:10px">
+     <div class="grow"><label for="iPri">Priority</label><select id="iPri">${pri}</select></div>
+     <div class="grow"><label for="iDue">Due</label><input type="date" id="iDue" value="${esc(n.d||'')}"></div>
+   </div>
+   <div class="acts">
+     <button class="btn" data-act="addChild">${ic('plus',16)}Child</button>
+     <button class="btn" data-act="addSibling">${ic('sibling',16)}Sibling</button>
+     <button class="btn" data-act="up"${x.i===0||root?' disabled':''}>${ic('up',16)}Move up</button>
+     <button class="btn" data-act="down"${root||x.i>=(x.p?x.p.c.length-1:0)?' disabled':''}>${ic('down',16)}Move down</button>
+     <button class="btn" data-act="dup"${root?' disabled':''}>${ic('copy',16)}Duplicate</button>
+     <button class="btn dng" data-act="del"${root?' disabled':''}>${ic('trash',16)}Delete</button>
+   </div>
+  </div>`;
+}
+function renderSync(){
+  const c=$('#syncChip'),s=S.sync;let txt='Saved on this device',cls='';
+  if(s.state==='busy'){txt='Syncing with Dropbox…';cls='busy'}
+  else if(s.state==='ok'){txt='Saved · Dropbox synced '+ago(s.last);cls=''}
+  else if(s.state==='err'){txt='Dropbox sync problem'+(s.msg?': '+s.msg:'');cls='err'}
+  else if(s.state==='warn'){txt=s.msg||'Needs attention';cls='warn'}
+  c.className=cls;c.title=txt;c.lastElementChild.textContent=txt;
+}
+function ago(t){const s=Math.round((Date.now()-t)/1000);if(s<45)return 'just now';const m=Math.round(s/60);if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+' h ago';return Math.round(h/24)+' d ago'}
+function renderBar(){
+  $('#lvl').innerHTML=[1,2,3,4,null].map(v=>`<button data-v="${v==null?'':v}" aria-pressed="${S.level===v}" aria-label="${v==null?'Show all levels':'Show '+v+(v===1?' level':' levels')+' below the root'}">${v==null?'All':v}</button>`).join('');
+  $$('#lay button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===S.layout)));
+  const tags=allTags();if(S.tag&&!tags.includes(S.tag))S.tag='';
+  $('#tagSel').innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option${t===S.tag?' selected':''}>${esc(t)}</option>`).join('');
+  $('#btnUndo').disabled=!S.undo.length;$('#btnRedo').disabled=!S.redo.length;
+  $('#btnFocus').innerHTML=ic('target',16)+(S.focus?'Exit focus':'Focus branch');
+  const path=pathTo(S.focus||S.sel||S.map.root.id).map(n=>n.t||'(empty)');
+  const cr=$('#crumb');
+  if(S.focus){cr.style.display='flex';cr.innerHTML=`<span>Focus: ${esc(path[path.length-1])}</span><button class="btn sm" id="crumbX">Exit focus</button>`}
+  else if(path.length>1){cr.style.display='flex';cr.innerHTML=`<span>${path.map(esc).join(' › ')}</span>`}
+  else cr.style.display='none';
+  if(document.activeElement!==$('#title'))$('#title').value=S.map.title;
+  renderSync();
+}
+function render(){
+  buildIndex();if(!S.sel||!N(S.sel))S.sel=S.map.root.id;if(S.focus&&!N(S.focus))S.focus=null;
+  renderMap();renderOutline();renderInsp();renderBar();
+}
+function select(id,o={}){
+  if(!N(id))return;S.sel=id;
+  if(o.reveal&&revealNode(id)){render()}else{renderMap();renderOutline();renderInsp();renderBar()}
+  if(o.center)centerOn(id);else ensureVisible(id);
+}
+function revealNode(id){
+  let ch=false;if(S.focus&&!isAnc(S.focus,id)){S.focus=null;ch=true}
+  let x=N(id);x=x&&x.p?N(x.p.id):null;
+  while(x){if(x.n.x===true||(x.n.x!==false&&S.level!=null&&x.d>=S.level)){x.n.x=false;ch=true}x=x.p?N(x.p.id):null}
+  if(ch)touch();return ch;
+}
+
+/* ---------------- editing ---------------- */
+function startEdit(id,isNew=false){
+  const x=N(id);if(!x)return;
+  if(S.editing)endEdit(true);
+  revealNode(id);S.sel=id;S.editing={id,isNew,orig:x.n.t};
+  renderMap();renderOutline();renderInsp();renderBar();ensureVisible(id);
+  const ed=$('#ed');ed.value=x.n.t;ed.style.display='block';placeEditor();ed.focus();ed.select();
+}
+function placeEditor(){
+  const e=S.editing,ed=$('#ed'),it=S.lay.byId.get(e.id);if(!it){ed.style.display='none';return}
+  const k=S.view.k,P=PAL[curTheme()],root=it.d===0,[bg]=root?[P.rootBg]:P.c[it.ci%8];
+  const task=it.task?20:0;
+  ed.style.left=(S.view.x+it.x*k)+'px';ed.style.top=(S.view.y+it.y*k)+'px';
+  ed.style.width=Math.max(it.w,150)*k+'px';
+  ed.style.fontSize=14*k+'px';ed.style.lineHeight=18*k+'px';ed.style.padding=`${6*k}px ${12*k}px`;
+  ed.style.fontWeight=it.d<=1?600:500;ed.style.background=bg;ed.style.color=root?P.rootFg:P.ink;ed.style.textAlign=root?'center':'left';
+  ed.style.borderRadius=(root?it.h/2:8)*k+'px';ed.style.paddingLeft=(12+task)*k+'px';
+  ed.style.height='auto';ed.style.height=Math.max(ed.scrollHeight,it.h*k)+'px';
+}
+function endEdit(save){
+  const e=S.editing;if(!e)return;
+  const ed=$('#ed'),val=ed.value.replace(/\s+$/,'');
+  S.editing=null;ed.style.display='none';
+  if(save){
+    if(e.isNew&&!val)undo();
+    else if(val!==e.orig)commit(()=>{N(e.id).n.t=val},{merge:e.isNew});
+    else renderMap();
+  }else if(e.isNew)undo();else renderMap();
+}
+$('#ed').addEventListener('input',()=>{if(S.editing)placeEditor()});
+$('#ed').addEventListener('blur',()=>{if(S.editing)endEdit(true)});
+$('#ed').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();endEdit(false)}
+  else if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){
+    e.preventDefault();const ed=S.editing,keepGoing=ed.isNew&&$('#ed').value.trim();
+    endEdit(true);if(keepGoing)cmd.addSibling();
+  }else if(e.key==='Tab'){e.preventDefault();const id=S.editing.id;endEdit(true);if(N(id))cmd.addChild()}
+});
+
+/* ---------------- commands ---------------- */
+let toastT;
+function toast(msg,label,act,ms=6000){
+  const t=$('#toast');t.innerHTML=`<span>${esc(msg)}</span>`+(label?`<button>${esc(label)}</button>`:'');t.style.display='flex';
+  if(label)t.querySelector('button').onclick=()=>{t.style.display='none';act()};
+  clearTimeout(toastT);toastT=setTimeout(()=>{t.style.display='none'},ms);
+}
+const selNode=()=>N(S.sel);
+const cmd={
+  addChild(){const id=S.sel;let nid;commit(()=>{const n=opAddChild(id);nid=n.id;S.sel=nid});startEdit(nid,true)},
+  addSibling(before=false){const id=S.sel;let nid;commit(()=>{const n=opAddSibling(id,before===true);nid=n.id;S.sel=nid});startEdit(nid,true)},
+  edit(){startEdit(S.sel)},
+  del(){
+    const x=selNode();if(!x||!x.p){toast('The root can’t be deleted');return}
+    const label=x.n.t||'(empty)',cnt=countNodes(x.n),pid=x.p.id;
+    commit(()=>{opDelete(x.n.id);S.sel=pid});
+    toast(`Deleted “${label.slice(0,40)}”${cnt>1?` and ${cnt-1} below`:''}`,'Undo',undo);
+  },
+  dup(){const x=selNode();if(!x||!x.p)return;commit(()=>{const c=cloneTree(x.n);x.p.c.splice(x.i+1,0,c);S.sel=c.id})},
+  up(){const id=S.sel;commit(()=>{opReorder(id,-1)})},
+  down(){const id=S.sel;commit(()=>{opReorder(id,1)})},
+  indent(){const id=S.sel;commit(()=>{opIndent(id)})},
+  outdent(){const id=S.sel;commit(()=>{opOutdent(id)})},
+  toggle(id=S.sel){const x=N(id);if(!x||!x.n.c.length)return;const it=S.lay.byId.get(id);const hiddenNow=it?it.hidden>0:x.n.x===true;commit(()=>{x.n.x=hiddenNow?false:true})},
+  expandAll(){S.level=null;commit(()=>{walk(S.map.root,n=>{delete n.x})})||render()},
+  collapseAll(){commit(()=>{walk(S.map.root,(n,d)=>{if(n.c.length&&d>0)n.x=true;else delete n.x})});S.level=null;render()},
+  setLevel(v){S.level=v;commit(()=>{walk(S.map.root,n=>{delete n.x})})||render();saveUi()},
+  focus(){if(S.focus){S.focus=null}else{if(!selNode().p){toast('Select a branch to focus on');return}S.focus=S.sel}render();fitView(true)},
+  fit(){fitView(true)},
+  zoomIn(){zoomAt(1.2)},zoomOut(){zoomAt(1/1.2)},zoomReset(){const r=stageRect();zoomAt(1/S.view.k,r.width/2,r.height/2)},
+  undo,redo,
+  copy(cut){
+    const x=selNode();if(!x)return;
+    const text=toIndented(x.n);S.clip={tree:JSON.parse(JSON.stringify(x.n)),text};
+    navigator.clipboard&&navigator.clipboard.writeText(text).catch(()=>{});
+    if(cut===true&&x.p)cmd.del();else toast('Copied “'+(x.n.t||'(empty)').slice(0,30)+'”');
+  },
+  cut(){cmd.copy(true)},
+  paste(text){
+    const id=S.sel;
+    const add=trees=>commit(()=>{const x=N(id);trees.forEach(t=>x.n.c.push(t));if(x.n.x===true||(S.level!=null&&x.d>=S.level))x.n.x=false});
+    if(S.clip&&(text==null||text===S.clip.text)){add([cloneTree(S.clip.tree)]);return}
+    if(!text)return;
+    const t=parseIndented(text);
+    if(t&&t.c.length){add(t.c);toast('Pasted '+t.c.reduce((a,c)=>a+countNodes(c),0)+' node(s)')}
+  },
+  search(){const q=$('#q');q.focus();q.select()},
+  nextMatch(d=1){jumpMatch(d)}
+};
+function jumpMatch(dir){
+  const l=S.matches;if(!l.length)return;
+  S.matchPos=(S.matchPos+dir+l.length)%l.length;
+  select(l[S.matchPos],{reveal:true,center:true});
+}
+function toggleCollapse(id){cmd.toggle(id)}
+
+/* ---------------- pointer, wheel, keyboard ---------------- */
+const svgEl=$('#svg'),ptrs=new Map();
+let drag=null,pinch=null,lastTap={id:null,t:0},lpTimer=null,ghost=null,dropId=null;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function setDrop(id){
+  if(dropId===id)return;
+  if(dropId){const o=$(`#vp [data-id="${dropId}"]`);o&&o.classList.remove('drop')}
+  dropId=id;
+  if(id){const o=$(`#vp [data-id="${id}"]`);o&&o.classList.add('drop')}
+}
+function startGhost(id){
+  ghost=document.createElement('div');
+  ghost.style.cssText='position:fixed;z-index:50;pointer-events:none;padding:6px 12px;border-radius:8px;background:var(--surf);border:2px solid var(--acc);box-shadow:var(--shadow);font-size:13px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  ghost.textContent=N(id).n.t||'(empty)';document.body.appendChild(ghost);
+}
+function moveGhost(e){
+  if(!ghost)return;
+  ghost.style.left=(e.clientX+14)+'px';ghost.style.top=(e.clientY+14)+'px';
+  const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest&&el.closest('#vp [data-id]');
+  const id=g&&g.dataset.id;
+  setDrop(id&&id!==drag.id&&!isAnc(drag.id,id)?id:null);
+}
+function endGhost(doDrop,srcId){
+  const target=dropId;setDrop(null);
+  if(ghost){ghost.remove();ghost=null}
+  if(doDrop&&target&&srcId&&commit(()=>{opMove(srcId,target)})){S.sel=srcId;select(srcId);toast('Moved under “'+(N(target).n.t||'(empty)').slice(0,30)+'”','Undo',undo)}
+}
+svgEl.addEventListener('pointerdown',e=>{
+  if(e.button===2)return;
+  if(S.editing)endEdit(true);
+  hidePop();
+  svgEl.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:dist(a,b),k:S.view.k,vx:S.view.x,vy:S.view.y,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};clearTimeout(lpTimer);if(drag&&drag.mode==='node')endGhost(false);drag=null;return}
+  const tg=e.target.closest('[data-tog]'),ck=e.target.closest('[data-chk]'),nd=e.target.closest('[data-id]');
+  drag={id:nd?nd.dataset.id:null,tog:tg&&tg.dataset.tog,chk:ck&&ck.dataset.chk,sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false,mode:nd&&!tg&&!ck?'node':'pan'};
+  clearTimeout(lpTimer);
+  if(drag.mode==='node'&&e.pointerType==='touch'){const px=e.clientX,py=e.clientY,id=drag.id;lpTimer=setTimeout(()=>{if(drag&&!drag.moved){drag.consumed=true;select(id);openNodeMenu(px,py)}},550)}
+});
+svgEl.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){
+    const [a,b]=[...ptrs.values()],r=stageRect(),k=clamp(pinch.k*dist(a,b)/pinch.d,0.12,3);
+    const mx=(a.x+b.x)/2-r.left,my=(a.y+b.y)/2-r.top,px=pinch.mx-r.left,py=pinch.my-r.top;
+    S.view.k=k;S.view.x=mx-(px-pinch.vx)*(k/pinch.k);S.view.y=my-(py-pinch.vy)*(k/pinch.k);applyView();return;
+  }
+  if(!drag)return;
+  const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+  if(!drag.moved&&Math.hypot(dx,dy)>6){
+    drag.moved=true;clearTimeout(lpTimer);
+    if(drag.mode==='node'){const x=N(drag.id);if(!x||!x.p||drag.id===viewRoot().id)drag.mode='pan';else startGhost(drag.id)}
+    svgEl.classList.add('pan');
+  }
+  if(!drag.moved)return;
+  if(drag.mode==='pan'){S.view.x=drag.vx+dx;S.view.y=drag.vy+dy;applyView()}else moveGhost(e);
+});
+function endPtr(e,cancel){
+  ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+  if(!drag)return;
+  clearTimeout(lpTimer);const d=drag;drag=null;svgEl.classList.remove('pan');
+  if(d.consumed){return}
+  if(d.moved){if(d.mode==='node')endGhost(!cancel,d.id);return}
+  if(cancel)return;
+  if(d.tog){toggleCollapse(d.tog);return}
+  if(d.chk){commit(()=>{const n=N(d.chk).n;n.k=!n.k});return}
+  if(d.id){
+    const now=Date.now();
+    if(lastTap.id===d.id&&now-lastTap.t<350){lastTap={id:null,t:0};select(d.id);startEdit(d.id)}
+    else{lastTap={id:d.id,t:now};select(d.id)}
+  }
+}
+svgEl.addEventListener('pointerup',e=>endPtr(e,false));
+svgEl.addEventListener('pointercancel',e=>endPtr(e,true));
+svgEl.addEventListener('contextmenu',e=>{
+  e.preventDefault();const nd=e.target.closest('[data-id]');
+  if(nd){select(nd.dataset.id);openNodeMenu(e.clientX,e.clientY)}
+});
+svgEl.addEventListener('dblclick',e=>{
+  if(e.target.closest('[data-id]'))return; // handled by tap logic
+  if(!e.target.closest('[data-tog]'))fitView(true);
+});
+$('#stage').addEventListener('wheel',e=>{
+  e.preventDefault();const r=stageRect();
+  if(e.ctrlKey||e.metaKey)zoomAt(Math.exp(-e.deltaY*0.01),e.clientX-r.left,e.clientY-r.top);
+  else if(e.deltaMode===1||(e.deltaX===0&&Math.abs(e.deltaY)>=100))zoomAt(e.deltaY<0?1.12:1/1.12,e.clientX-r.left,e.clientY-r.top);
+  else{S.view.x-=e.deltaX;S.view.y-=e.deltaY;applyView()}
+},{passive:false});
+$('#mini').addEventListener('pointerdown',e=>{
+  const t=S.miniT;if(!t)return;
+  const cv=e.currentTarget,rc=cv.getBoundingClientRect(),px=(e.clientX-rc.left)*cv.width/rc.width,py=(e.clientY-rc.top)*cv.height/rc.height;
+  const mx=(px-t.ox)/t.sc,my=(py-t.oy)/t.sc,r=stageRect(),k=S.view.k;
+  S.view.x=r.width/2-mx*k;S.view.y=r.height/2-my*k;applyView(true);
+});
+function navigate(key){
+  const it=S.lay.byId.get(S.sel);if(!it)return;
+  if(key==='ArrowUp'||key==='ArrowDown'){
+    const cy=it.y+it.h/2,dir=key==='ArrowDown'?1:-1;let best=null,bd=Infinity;
+    for(const o of S.lay.items){if(o===it||o.d!==it.d||o.dir!==it.dir)continue;const d=(o.y+o.h/2-cy)*dir;if(d>0&&d<bd){bd=d;best=o}}
+    if(best)select(best.n.id);
+  }else{
+    const toward=key==='ArrowRight'?1:-1;
+    if(it.d===0){const k=it.kids.find(k=>k.dir===toward);if(k)select(k.n.id);return}
+    if(it.dir===toward){
+      if(it.kids.length)select(it.kids[Math.floor((it.kids.length-1)/2)].n.id);
+      else if(it.hasKids)commit(()=>{it.n.x=false});
+    }else{const p=N(it.n.id).p;if(p&&S.lay.byId.has(p.id))select(p.id)}
+  }
+}
+function typing(t){return t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)}
+const dialogOpen=()=>$$('dialog').some(d=>d.open);
+document.addEventListener('keydown',e=>{
+  if(dialogOpen()&&!(e.key==='k'&&(e.ctrlKey||e.metaKey)))return;
+  const mod=e.ctrlKey||e.metaKey,k=e.key;
+  if(mod&&k.toLowerCase()==='k'){e.preventDefault();openPalette();return}
+  if(typing(e.target)){
+    if(e.target.id==='q'){
+      if(k==='Enter'){e.preventDefault();jumpMatch(e.shiftKey?-1:1)}
+      else if(k==='Escape'){e.target.value='';S.q='';S.matchPos=-1;renderMap();renderOutline();e.target.blur()}
+    }
+    return;
+  }
+  if(mod){
+    const l=k.toLowerCase();
+    if(l==='z'){e.preventDefault();e.shiftKey?redo():undo()}
+    else if(l==='y'){e.preventDefault();redo()}
+    else if(l==='s'){e.preventDefault();nameVersion()}
+    else if(l==='f'){e.preventDefault();cmd.search()}
+    else if(l==='d'){e.preventDefault();cmd.dup()}
+    else if(l==='c'&&!getSelection().toString()){cmd.copy()}
+    else if(l==='x'){e.preventDefault();cmd.cut()}
+    return;
+  }
+  if(e.altKey){
+    if(k==='ArrowUp'){e.preventDefault();cmd.up()}else if(k==='ArrowDown'){e.preventDefault();cmd.down()}
+    else if(k==='ArrowRight'){e.preventDefault();cmd.indent()}else if(k==='ArrowLeft'){e.preventDefault();cmd.outdent()}
+    return;
+  }
+  switch(k){
+    case 'Tab':e.preventDefault();cmd.addChild();break;
+    case 'Enter':e.preventDefault();cmd.addSibling(e.shiftKey);break;
+    case 'F2':e.preventDefault();cmd.edit();break;
+    case 'Delete':case 'Backspace':e.preventDefault();cmd.del();break;
+    case ' ':e.preventDefault();cmd.toggle();break;
+    case 'ArrowUp':case 'ArrowDown':case 'ArrowLeft':case 'ArrowRight':e.preventDefault();navigate(k);break;
+    case 'Home':select(viewRoot().id,{center:true});break;
+    case '/':e.preventDefault();cmd.search();break;
+    case '?':openHelp();break;
+    case '+':case '=':cmd.zoomIn();break;
+    case '-':cmd.zoomOut();break;
+    case '0':cmd.fit();break;
+    case 'Escape':if(S.focus){cmd.focus()}else if(S.q){S.q='';$('#q').value='';renderMap();renderOutline()}break;
+  }
+});
+document.addEventListener('paste',e=>{
+  if(typing(e.target)||dialogOpen())return;
+  const text=e.clipboardData&&e.clipboardData.getData('text');
+  e.preventDefault();cmd.paste(text||null);
+});
+
+/* ---------------- popup menu, modal ---------------- */
+function popMenu(items,x,y){
+  const p=$('#pop');
+  p.innerHTML=items.map((it,i)=>it==='-'?'<hr>':`<button role="menuitem" data-i="${i}"${it.disabled?' disabled':''}${it.danger?' style="color:var(--danger)"':''}><span>${esc(it.label)}</span>${it.key?`<kbd>${esc(it.key)}</kbd>`:''}</button>`).join('');
+  p.style.display='block';
+  const r=p.getBoundingClientRect();
+  p.style.left=clamp(x,8,innerWidth-r.width-8)+'px';p.style.top=clamp(y,8,innerHeight-r.height-8)+'px';
+  p.onclick=e=>{const b=e.target.closest('button[data-i]');if(!b)return;const it=items[+b.dataset.i];hidePop();it.run&&it.run()};
+  const f=p.querySelector('button:not([disabled])');f&&f.focus();
+}
+const popAt=(el,items)=>{const r=el.getBoundingClientRect();popMenu(items,r.right-220,r.bottom+4)};
+const hidePop=()=>{$('#pop').style.display='none'};
+document.addEventListener('pointerdown',e=>{if(!$('#pop').contains(e.target))hidePop()},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#pop').style.display==='block'){hidePop()}},true);
+function openNodeMenu(x,y){
+  const n=selNode();if(!n)return;const root=!n.p;
+  popMenu([
+    {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},'-',
+    {label:'Copy',key:'Ctrl+C',run:()=>cmd.copy()},{label:'Cut',key:'Ctrl+X',run:cmd.cut,disabled:root},{label:'Paste as children',key:'Ctrl+V',run:async()=>{let t=null;try{t=await navigator.clipboard.readText()}catch{}cmd.paste(t)}},{label:'Duplicate',key:'Ctrl+D',run:cmd.dup,disabled:root},'-',
+    {label:n.n.c.length?'Collapse or expand':'No children',key:'Space',run:()=>cmd.toggle(),disabled:!n.n.c.length},{label:S.focus?'Exit focus':'Focus on this branch',run:cmd.focus},'-',
+    {label:'Delete',key:'Del',run:cmd.del,danger:true,disabled:root}
+  ],x,y);
+}
+let modalFin=null;
+function modal(title,html,actions=[{label:'Close'}],o={}){
+  return new Promise(res=>{
+    const d=$('#dlg'),was=d.open;
+    if(modalFin)modalFin(undefined);
+    d.innerHTML=`<div class="dh"><h2>${esc(title)}</h2><button class="ib" aria-label="Close" data-x>${ic('close',18)}</button></div><div class="db">${html}</div>`+
+      (actions.length?`<div class="df">${actions.map((a,i)=>`<button class="btn${a.primary?' pri':''}${a.danger?' dng':''}" data-i="${i}">${esc(a.label)}</button>`).join('')}</div>`:'');
+    let settled=false;const fin=v=>{if(!settled){settled=true;res(v)}};modalFin=fin;
+    d.onclose=()=>{if(d.open)return;fin(undefined)};   // ignore stale close events from a dialog we just replaced
+    d.onclick=e=>{if(e.target===d)d.close()};
+    d.querySelector('[data-x]').onclick=()=>d.close();
+    $$('.df button',d).forEach(b=>b.onclick=async()=>{const a=actions[+b.dataset.i];if(a.run){const r=await a.run(d);if(r===false)return}fin(a.value);d.close()});
+    if(!was)d.showModal();
+    if(o.onOpen)o.onOpen(d);
+  });
+}
+const confirmBox=(msg,ok='OK',danger=false)=>modal('Please confirm',`<p style="margin:0">${esc(msg)}</p>`,[{label:'Cancel',value:false},{label:ok,primary:!danger,danger,value:true}]);
+
+/* ---------------- storage (IndexedDB) ---------------- */
+const DB={
+  db:null,
+  open(){return new Promise((res,rej)=>{
+    const r=indexedDB.open('simple-mind-map',1);
+    r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('maps',{keyPath:'id'});d.createObjectStore('snaps',{keyPath:'id',autoIncrement:true}).createIndex('mapId','mapId');d.createObjectStore('meta',{keyPath:'k'})};
+    r.onsuccess=()=>{DB.db=r.result;res()};r.onerror=()=>rej(r.error);
+  })},
+  tx(store,mode,fn){return new Promise((res,rej)=>{
+    const t=DB.db.transaction(store,mode);let out;const rq=fn(t.objectStore(store));
+    if(rq)rq.onsuccess=()=>{out=rq.result};
+    t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);
+  })},
+  get:(s,k)=>DB.tx(s,'readonly',st=>st.get(k)),
+  put:(s,v)=>DB.tx(s,'readwrite',st=>st.put(v)),
+  del:(s,k)=>DB.tx(s,'readwrite',st=>st.delete(k)),
+  all:s=>DB.tx(s,'readonly',st=>st.getAll()),
+  snapsOf:id=>DB.tx('snaps','readonly',st=>st.index('mapId').getAll(id)),
+  async delSnapsOf(id){for(const s of await DB.snapsOf(id))await DB.del('snaps',s.id)},
+  async meta(k){const r=await DB.get('meta',k);return r&&r.v},
+  setMeta:(k,v)=>DB.put('meta',{k,v})
+};
+const saveSoon=debounce(()=>{saveMap()},700);
+async function saveMap(quiet){
+  const m=S.map;if(!m||!DB.db)return;
+  m.view={...S.view};m.ui={level:S.level,layout:S.layout};
+  try{await DB.put('maps',m)}catch(err){toast('Could not save: '+err.message);return}
+  upsertList(m);
+  if(quiet!==true){snapSoon();scheduleSync()}
+}
+function upsertList(m){
+  const row={id:m.id,title:m.title,updated:m.updated,nodes:countNodes(m.root)};
+  const i=S.maps.findIndex(x=>x.id===m.id);if(i<0)S.maps.push(row);else S.maps[i]=row;
+}
+function saveUi(){try{localStorage.setItem('smm.ui',JSON.stringify({layout:S.layout,level:S.level,outline:S.set.outline,insp:S.set.insp}))}catch{}}
+async function saveSettings(){await DB.setMeta('settings',S.set)}
+
+/* ---------------- version history ---------------- */
+const dayKey=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()};
+function flat(root){const m=new Map();(function w(n,p){m.set(n.id,{n,p});n.c.forEach(c=>w(c,n.id))})(root,null);return m}
+const detailKey=n=>JSON.stringify([n.n,n.tg,n.col,n.k,n.p,n.d]);
+function diffTrees(a,b){
+  const A=flat(a),B=flat(b),r={added:[],removed:[],renamed:[],moved:[],edited:[]};
+  for(const [id,o] of B){
+    const q=A.get(id);
+    if(!q){r.added.push(o.n);continue}
+    if(q.n.t!==o.n.t)r.renamed.push({from:q.n.t,to:o.n.t});
+    if(q.p!==o.p)r.moved.push(o.n);
+    if(detailKey(q.n)!==detailKey(o.n))r.edited.push(o.n);
+  }
+  for(const [id,o] of A)if(!B.has(id))r.removed.push(o.n);
+  return r;
+}
+function diffSummary(d){
+  const p=[],pl=(n,w)=>n+' '+w+(n===1?'':'s');
+  if(d.added.length)p.push('Added '+pl(d.added.length,'node'));
+  if(d.removed.length)p.push('Removed '+pl(d.removed.length,'node'));
+  if(d.renamed.length)p.push('Renamed '+d.renamed.length);
+  if(d.moved.length)p.push('Moved '+d.moved.length);
+  if(d.edited.length)p.push('Edited details on '+d.edited.length);
+  return p.length?p.slice(0,3).join(', '):'Reordered or minor change';
+}
+let snapRetry=null;
+async function takeSnapshot(o={}){
+  const m=S.map;if(!m||!DB.db)return null;
+  const data=JSON.stringify({t:m.title,r:m.root});
+  const snaps=(await DB.snapsOf(m.id)).sort((a,b)=>a.ts-b.ts),last=snaps[snaps.length-1];
+  if(!o.name&&last&&last.data===data)return null;
+  if(!o.force&&!o.name&&last&&Date.now()-last.ts<120000){
+    if(!snapRetry)snapRetry=setTimeout(()=>{snapRetry=null;takeSnapshot()},120000-(Date.now()-last.ts)+500);
+    return null;
+  }
+  const diff=last?diffTrees(JSON.parse(last.data).r,m.root):null;
+  const rec={mapId:m.id,ts:Date.now(),name:o.name||null,title:m.title,data,nodes:countNodes(m.root),summary:o.summary||(diff?diffSummary(diff):'First snapshot')};
+  await DB.put('snaps',rec);await thinSnaps(m.id);
+  return rec;
+}
+const snapSoon=debounce(()=>{takeSnapshot().catch(()=>{})},20000);
+/* keep: everything from the last hour, hourly for a day, daily for 30 days, plus all named versions */
+async function thinSnaps(mapId){
+  const snaps=(await DB.snapsOf(mapId)).sort((a,b)=>b.ts-a.ts),now=Date.now(),seen=new Set(),del=[];
+  for(const s of snaps){
+    if(s.name)continue;
+    const age=now-s.ts;let key;
+    if(age<=3600e3)continue;
+    else if(age<=86400e3)key='h'+Math.floor(s.ts/3600e3);
+    else if(age<=30*86400e3)key='d'+dayKey(s.ts);
+    else{del.push(s.id);continue}
+    if(seen.has(key))del.push(s.id);else seen.add(key);
+  }
+  for(const id of del)await DB.del('snaps',id);
+}
+const nameVersion=()=>saveNamedVersion();
+async function saveNamedVersion(){
+  let name=null;
+  const r=await modal('Name this version',`<label class="field" for="vn">Name</label><input class="in" id="vn" placeholder="e.g. Before restructure" autocomplete="off" maxlength="80">`,
+    [{label:'Cancel'},{label:'Save version',primary:true,run:d=>{name=$('#vn',d).value.trim();if(!name){$('#vn',d).focus();return false}},value:'ok'}],
+    {onOpen:d=>{const i=$('#vn',d);i.focus();i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('.df .pri',d).click()}})}});
+  if(r!=='ok'||!name)return false;
+  await takeSnapshot({name,summary:'Named version'});toast('Saved version “'+name+'”');return true;
+}
+const timeLabel=ts=>new Date(ts).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+function dayLabel(ts){
+  const d=new Date(ts),t=new Date(),y=new Date(Date.now()-864e5);
+  if(dayKey(ts)===dayKey(t))return 'Today';if(dayKey(ts)===dayKey(y))return 'Yesterday';
+  return d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+}
+async function openVersions(){
+  await saveMap();await takeSnapshot().catch(()=>{});
+  const fill=async d=>{
+    const snaps=(await DB.snapsOf(S.map.id)).sort((a,b)=>b.ts-a.ts);
+    const named=snaps.filter(s=>s.name),rest=snaps.filter(s=>!s.name);
+    const row=s=>`<div data-id="${s.id}"><div class="grow"><div><b>${esc(s.name||s.summary)}</b></div><div class="small mut">${esc(dayLabel(s.ts))}, ${esc(timeLabel(s.ts))} · ${s.nodes} nodes${s.name?' · '+esc(s.summary):''}</div><div class="cmp small" style="margin-top:6px"></div></div><button class="btn sm" data-cmp>Compare</button><button class="btn sm" data-rest>Restore</button></div>`;
+    let h=`<div><div class="grow"><div><b>Current version</b></div><div class="small mut">Autosaved ${esc(timeLabel(S.map.updated))} · ${countNodes(S.map.root)} nodes</div></div><span class="pill">Current</span></div>`;
+    if(named.length)h+=`<div class="grp" style="display:block;border:0">Named</div>`+named.map(row).join('');
+    let g=null;
+    for(const s of rest){const l=dayLabel(s.ts);if(l!==g){g=l;h+=`<div class="grp" style="display:block;border:0">${esc(l)}</div>`}h+=row(s)}
+    if(!snaps.length)h+='<div class="mut">No earlier versions yet. Versions are saved automatically as you edit.</div>';
+    $('#vlist',d).innerHTML=h;
+  };
+  modal('Version history',`<div class="note">Restoring creates a new version of the map. Nothing is deleted. Older autosaves thin out over time: all of the last hour, hourly for a day, daily for 30 days. Named versions are kept forever.</div>
+    <div class="row" style="margin-bottom:6px"><button class="btn" id="vName">${ic('star',16)}Name this version</button></div><div class="list" id="vlist"></div>`,[{label:'Close'}],{onOpen:d=>{
+      fill(d);
+      $('#vName',d).onclick=async()=>{if(await saveNamedVersion())fill(d)};
+      $('#vlist',d).onclick=async e=>{
+        const r=e.target.closest('[data-id]');if(!r)return;const id=+r.dataset.id;
+        const snap=await DB.get('snaps',id);if(!snap)return;
+        if(e.target.closest('[data-cmp]')){
+          const box=$('.cmp',r);if(box.innerHTML){box.innerHTML='';return}
+          const df=diffTrees(JSON.parse(snap.data).r,S.map.root),L=[];
+          df.added.forEach(n=>L.push('<div>Added since then: '+esc(n.t||'(empty)')+'</div>'));
+          df.removed.forEach(n=>L.push('<div>Removed since then: '+esc(n.t||'(empty)')+'</div>'));
+          df.renamed.forEach(n=>L.push('<div>Renamed: '+esc(n.from||'(empty)')+' → '+esc(n.to||'(empty)')+'</div>'));
+          box.innerHTML=(L.slice(0,30).join('')||'<div>Same text and structure as now.</div>')+(L.length>30?'<div>…and '+(L.length-30)+' more</div>':'');
+        }else if(e.target.closest('[data-rest]')){
+          if(await confirmBox('Restore this version? Your current version is saved to history first.','Restore')!==true){openVersions();return}
+          await takeSnapshot({force:true,summary:'Before restoring a version'}).catch(()=>{});
+          const o=JSON.parse(snap.data);
+          commit(()=>{S.map.root=o.r;S.map.title=o.t});buildIndex();render();fitView();
+          toast('Restored version from '+dayLabel(snap.ts)+', '+timeLabel(snap.ts),'Undo',undo);
+        }
+      };
+    }});
+}
+
+/* ---------------- text, Markdown, OPML, FreeMind, draw.io, SVG/PNG ---------------- */
+const xa=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\r?\n/g,'&#10;');
+const safeName=s=>String(s||'map').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'map';
+function mdLine(n){
+  let s=(n.k!==undefined?(n.k?'[x] ':'[ ] '):'')+String(n.t||'').replace(/\n/g,' ');
+  if(n.d)s+=' (due '+n.d+')';
+  if(n.tg&&n.tg.length)s+=' '+n.tg.map(t=>'#'+t).join(' ');
+  return s;
+}
+function mdLines(n,d,notes,out){
+  const pad='  '.repeat(d);
+  out.push(pad+'- '+mdLine(n));
+  if(notes&&n.n)n.n.split('\n').forEach(l=>out.push(pad+'  > '+l));
+  n.c.forEach(c=>mdLines(c,d+1,notes,out));
+}
+function toIndented(n){const o=[];mdLines(n,0,false,o);return o.join('\n')}
+function toMD(map){
+  const o=['# '+mdLine({...map.root,t:map.root.t||map.title})];
+  if(map.root.n)map.root.n.split('\n').forEach(l=>o.push('> '+l));
+  map.root.c.forEach(c=>mdLines(c,0,true,o));
+  return o.join('\n')+'\n';
+}
+/* Parses indented lists and Markdown (headings, bullets, [ ] tasks, > notes, #tags, (due YYYY-MM-DD)). Returns a virtual root {t:'',c:[...]}. */
+function parseIndented(text){
+  const lines=String(text).replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(!lines.length)return null;
+  const widths=[];
+  for(const l of lines){if(/^\s*#{1,6}\s/.test(l))continue;const w=/^[\t ]*/.exec(l)[0].replace(/\t/g,'    ').length;if(w>0)widths.push(w)}
+  const unit=widths.length?Math.min(...widths):2;
+  const root={t:'',c:[]},stack=[{lvl:-1,node:root}];
+  let head=-1,last=null;
+  for(const line of lines){
+    let lvl,t;const hm=/^(#{1,6})\s+(.*)$/.exec(line);
+    if(hm){lvl=hm[1].length-1;t=hm[2].trim();head=lvl}
+    else{const w=/^[\t ]*/.exec(line)[0].replace(/\t/g,'    ').length;t=line.trim();lvl=Math.round(w/unit)+head+1}
+    if(!hm&&/^>\s?/.test(t)&&last){last.n=(last.n?last.n+'\n':'')+t.replace(/^>\s?/,'');continue}
+    t=t.replace(/^([-*+]|\d+[.)])\s+/,'');
+    const node=newNode('');
+    const ck=/^\[( |x|X)\]\s+/.exec(t);if(ck){node.k=ck[1]!==' ';t=t.slice(ck[0].length)}
+    const due=/\s*\(due (\d{4}-\d{2}-\d{2})\)/.exec(t);if(due){node.d=due[1];t=t.replace(due[0],'')}
+    const tg=/(?:\s+#[\w-]+)+\s*$/.exec(t);if(tg&&tg.index>0){node.tg=tg[0].trim().split(/\s+/).map(x=>x.slice(1));t=t.slice(0,tg.index)}
+    node.t=t.trim();
+    while(stack[stack.length-1].lvl>=lvl)stack.pop();
+    stack[stack.length-1].node.c.push(node);stack.push({lvl,node});last=node;
+  }
+  return root;
+}
+function opmlOutline(n,d){
+  const pad=' '.repeat(d*2+4);
+  let a=` text="${xa(n.t)}"`;
+  if(n.n)a+=` _note="${xa(n.n)}"`;
+  if(n.k===true)a+=` _status="checked"`;else if(n.k===false)a+=` _status="unchecked"`;
+  if(n.tg&&n.tg.length)a+=` tags="${xa(n.tg.join(','))}"`;
+  if(n.d)a+=` due="${xa(n.d)}"`;
+  if(n.p)a+=` priority="${n.p}"`;
+  return n.c.length?`${pad}<outline${a}>\n${n.c.map(c=>opmlOutline(c,d+1)).join('')}${pad}</outline>\n`:`${pad}<outline${a}/>\n`;
+}
+const toOPML=map=>`<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head><title>${xa(map.title)}</title></head>\n  <body>\n${opmlOutline(map.root,0)}  </body>\n</opml>\n`;
+function mmNode(n,d,side){
+  let a=` ID="ID_${n.id}" TEXT="${xa(n.t)}"`;
+  if(side)a+=` POSITION="${side}"`;
+  if(n.x===true)a+=` FOLDED="true"`;
+  const inner=[];
+  if(n.n)inner.push(`<richcontent TYPE="NOTE"><html><head/><body>${n.n.split('\n').map(l=>`<p>${xa(l.replace(/&#10;/g,''))}</p>`).join('')}</body></html></richcontent>`);
+  if(n.k===true)inner.push('<icon BUILTIN="button_ok"/>');
+  if(n.tg&&n.tg.length)inner.push(`<attribute NAME="tags" VALUE="${xa(n.tg.join(','))}"/>`);
+  if(n.d)inner.push(`<attribute NAME="due" VALUE="${xa(n.d)}"/>`);
+  if(n.p)inner.push(`<attribute NAME="priority" VALUE="${n.p}"/>`);
+  if(n.k===false)inner.push('<attribute NAME="task" VALUE="open"/>');
+  const kids=n.c.map(c=>mmNode(c,d+1,null)).join('');
+  return `<node${a}>${inner.join('')}${kids}</node>`;
+}
+function toMM(map){
+  const lay=computeLayout(map.root,{mode:S.layout,full:true}),side=new Map();
+  lay.root.kids.forEach(k=>side.set(k.n.id,k.dir<0?'left':'right'));
+  const r=map.root;
+  const root=mmNode({...r,c:[]},0,null).replace(/<\/node>$/,'');
+  const kids=r.c.map(c=>{const s=mmNode(c,1,side.get(c.id)||'right');return s}).join('');
+  return `<map version="1.0.1">\n<!-- Exported from Simple Mind Map -->\n${root}${kids}</node>\n</map>\n`;
+}
+function drawioXml(map){
+  const lay=computeLayout(map.root,{mode:S.layout,full:true}),P=PAL.light,ox=-lay.bbox.x+20,oy=-lay.bbox.y+20;
+  const ids=new Map();lay.items.forEach((it,i)=>ids.set(it.n.id,'n'+i));
+  const val=t=>xa(String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r?\n/g,'<br>'));
+  let cells='<mxCell id="0"/><mxCell id="1" parent="0"/>';
+  for(const it of lay.items){
+    const root=it.d===0,[bg,bd]=root?[P.rootBg,P.rootBg]:P.c[it.ci%8];
+    const text=it.n.t+(it.n.n?'':'');
+    const style=`rounded=1;arcSize=${root?50:18};whiteSpace=wrap;html=1;fillColor=${bg};strokeColor=${bd};fontColor=${root?P.rootFg:P.ink};fontSize=14;fontStyle=${it.d<=1?1:0};align=${root?'center':'left'};spacingLeft=8;spacingRight=8;`;
+    cells+=`<mxCell id="${ids.get(it.n.id)}" value="${val(text)}" style="${style}" vertex="1" parent="1"><mxGeometry x="${Math.round(it.x+ox)}" y="${Math.round(it.y+oy)}" width="${Math.round(it.w)}" height="${Math.round(it.h)}" as="geometry"/></mxCell>`;
+  }
+  lay.edges.forEach((e,i)=>{
+    const col=P.c[e.b.ci%8][1];
+    cells+=`<mxCell id="e${i}" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;endArrow=none;html=1;strokeWidth=${e.b.d===1?3:2};strokeColor=${col};" edge="1" parent="1" source="${ids.get(e.a.n.id)}" target="${ids.get(e.b.n.id)}"><mxGeometry relative="1" as="geometry"/></mxCell>`;
+  });
+  return `<mxfile host="app.diagrams.net" version="24.0.0"><diagram name="${xa(map.title)}" id="smm-${map.id}"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0"><root>${cells}</root></mxGraphModel></diagram></mxfile>`;
+}
+function toSVG(map,theme='light'){
+  const lay=computeLayout(map.root,{mode:S.layout,full:true}),P=PAL[theme],b=lay.bbox;
+  const bg=theme==='dark'?'#1A1D1F':'#FFFFFF';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(b.w)}" height="${Math.ceil(b.h)}" viewBox="${b.x} ${b.y} ${b.w} ${b.h}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${bg}"/>${edgesSVG(lay,P)}${lay.items.map(it=>nodeSVG(it,P,{noUi:true})).join('')}</svg>`;
+}
+async function svgToPngBlob(svg,scale=2){
+  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));
+  try{
+    const img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('Could not render image'));img.src=url});
+    let w=img.naturalWidth*scale,h=img.naturalHeight*scale;const lim=8000,f=Math.min(1,lim/Math.max(w,h));w=Math.round(w*f);h=Math.round(h*f);
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
+    return await new Promise(res=>cv.toBlob(res,'image/png'));
+  }finally{URL.revokeObjectURL(url)}
+}
+function download(name,data,type='application/octet-stream'){
+  const blob=data instanceof Blob?data:new Blob([data],{type});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+}
+const exportable=()=>({...S.map,root:S.map.root});
+async function doExport(fmt){
+  const m=exportable(),base=safeName(m.title);
+  if(fmt==='json')download(base+'.smm.json',JSON.stringify({smm:1,id:m.id,title:m.title,created:m.created,updated:m.updated,root:m.root},null,1),'application/json');
+  else if(fmt==='mm')download(base+'.mm',toMM(m),'application/xml');
+  else if(fmt==='opml')download(base+'.opml',toOPML(m),'text/x-opml');
+  else if(fmt==='md')download(base+'.md',toMD(m),'text/markdown');
+  else if(fmt==='drawio')download(base+'.drawio',drawioXml(m),'application/vnd.jgraph.mxfile');
+  else if(fmt==='svg')download(base+'.svg',toSVG(m,curTheme()),'image/svg+xml');
+  else if(fmt==='png')download(base+'.png',await svgToPngBlob(toSVG(m,'light')));
+}
+function openExport(){
+  const items=[['json','Simple Mind Map file','.smm.json · everything, can be re-imported'],['mm','FreeMind','.mm · Freeplane, XMind, MindManager and others'],['opml','OPML','.opml · outliners and many mind-map tools'],['md','Markdown','.md · nested list with notes'],['drawio','draw.io','.drawio · editable diagram for diagrams.net'],['svg','SVG image','.svg · scalable picture'],['png','PNG image','.png · picture for slides and docs']];
+  modal('Export “'+(S.map.title||'map')+'”',`<div class="note">Exports include the whole map, including collapsed and hidden levels.</div><div class="list">${items.map(([k,t,s])=>`<div><div class="grow"><b>${t}</b><div class="small mut">${s}</div></div><button class="btn sm" data-fmt="${k}">${ic('download',14)}Download</button></div>`).join('')}</div>
+    <div class="grp" style="display:block">Everything</div><div class="list"><div><div class="grow"><b>Backup of all maps</b><div class="small mut">.zip · every map plus its version history</div></div><button class="btn sm" data-fmt="backup">${ic('archive',14)}Download</button></div></div>`,
+    [{label:'Close'}],{onOpen:d=>{d.querySelector('.db').onclick=async e=>{
+      const b=e.target.closest('[data-fmt]');if(!b)return;
+      try{if(b.dataset.fmt==='backup')await downloadBackup();else await doExport(b.dataset.fmt)}catch(err){toast('Export failed: '+err.message)}
+    }}});
+}
+
+/* ---------------- import ---------------- */
+function treeFromParsed(p,fallbackTitle){
+  if(p.c.length===1)return p.c[0];
+  return {id:uid(),t:fallbackTitle||'Imported',c:p.c};
+}
+function parseOPML(text){
+  const doc=new DOMParser().parseFromString(text,'application/xml');
+  if(doc.querySelector('parsererror'))throw new Error('Not a valid OPML file');
+  const title=(doc.querySelector('head > title')||{}).textContent||'Imported';
+  const conv=el=>{
+    const n=newNode(el.getAttribute('text')||el.getAttribute('title')||'');
+    const note=el.getAttribute('_note');if(note)n.n=note;
+    const st=el.getAttribute('_status');if(st==='checked')n.k=true;else if(st==='unchecked')n.k=false;
+    const tg=el.getAttribute('tags');if(tg)n.tg=tg.split(',').map(s=>s.trim()).filter(Boolean);
+    const due=el.getAttribute('due');if(due)n.d=due;
+    const pr=+el.getAttribute('priority');if(pr)n.p=pr;
+    n.c=[...el.children].filter(c=>c.tagName==='outline').map(conv);
+    return n;
+  };
+  const top=[...doc.querySelector('body').children].filter(c=>c.tagName==='outline').map(conv);
+  return {title,root:top.length===1?top[0]:{id:uid(),t:title,c:top}};
+}
+function parseMM(text){
+  const doc=new DOMParser().parseFromString(text,'application/xml');
+  if(doc.querySelector('parsererror'))throw new Error('Not a valid FreeMind file');
+  const conv=el=>{
+    let t=el.getAttribute('TEXT');
+    const rc=[...el.children].find(c=>c.tagName==='richcontent'&&c.getAttribute('TYPE')==='NODE');
+    if(t==null&&rc)t=rc.textContent.replace(/\s+/g,' ').trim();
+    const n=newNode(t||'');
+    if(el.getAttribute('FOLDED')==='true')n.x=true;
+    const note=[...el.children].find(c=>c.tagName==='richcontent'&&c.getAttribute('TYPE')==='NOTE');
+    if(note){const ps=[...note.querySelectorAll('p')].map(p=>p.textContent.trim());n.n=(ps.length?ps.join('\n'):note.textContent.trim())||undefined;if(!n.n)delete n.n}
+    for(const c of el.children){
+      if(c.tagName==='icon'&&/button_ok/.test(c.getAttribute('BUILTIN')||''))n.k=true;
+      if(c.tagName==='attribute'){const k=c.getAttribute('NAME'),v=c.getAttribute('VALUE');
+        if(k==='tags'&&v)n.tg=v.split(',').map(s=>s.trim()).filter(Boolean);
+        if(k==='due'&&v)n.d=v;if(k==='priority'&&+v)n.p=+v;if(k==='task'&&n.k===undefined)n.k=false}
+    }
+    n.c=[...el.children].filter(c=>c.tagName==='node').map(conv);
+    return n;
+  };
+  const top=doc.querySelector('map > node');if(!top)throw new Error('No nodes found');
+  const root=conv(top);return {title:root.t||'Imported',root};
+}
+async function importText(name,text){
+  const ext=(name.split('.').pop()||'').toLowerCase();let title=name.replace(/\.[^.]+$/,'').replace(/\.smm$/,''),root;
+  if(ext==='json'){
+    const o=JSON.parse(text);
+    if(!o||!o.root)throw new Error('Not a Simple Mind Map file');
+    const m=mkMap(o.title||title,o.root);if(o.id&&!S.maps.some(x=>x.id===o.id))m.id=o.id;
+    return saveNewMap(m);
+  }
+  if(ext==='opml'||ext==='xml'&&/<opml/i.test(text)){const r=parseOPML(text);title=r.title||title;root=r.root}
+  else if(ext==='mm'){const r=parseMM(text);title=r.title||title;root=r.root}
+  else{const p=parseIndented(text);if(!p)throw new Error('Nothing to import');root=treeFromParsed(p,title);if(p.c.length===1)title=root.t||title}
+  return saveNewMap(mkMap(title,root));
+}
+async function saveNewMap(m){await DB.put('maps',m);upsertList(m);return m}
+async function importFiles(files){
+  let last=null,count=0;
+  for(const f of files){
+    try{
+      if(/\.zip$/i.test(f.name)){count+=await restoreZip(await f.arrayBuffer());continue}
+      last=await importText(f.name,await f.text());count++;
+    }catch(err){toast('Could not import '+f.name+': '+err.message)}
+  }
+  if(last){await openMap(last.id);toast('Imported '+count+(count===1?' map':' maps'))}
+  else if(count)toast('Restored '+count+(count===1?' map':' maps'));
+}
+function openImport(){
+  modal('Import',`<label class="field" for="impF">Choose files</label><input class="in" type="file" id="impF" multiple accept=".json,.mm,.opml,.xml,.md,.txt,.zip">
+   <div class="small mut" style="margin-top:6px">Simple Mind Map (.json), FreeMind (.mm), OPML, Markdown or text outlines, or a backup (.zip). You can also drop files on the page.</div>
+   <label class="field" for="impT">Or paste an indented list or Markdown</label><textarea class="in" id="impT" placeholder="Project&#10;  Goals&#10;  Tasks&#10;    Write plan"></textarea>`,
+   [{label:'Cancel'},{label:'Import pasted text',primary:true,run:async d=>{
+      const t=$('#impT',d).value;if(!t.trim()){$('#impT',d).focus();return false}
+      try{const m=await importText('Pasted outline.md',t);await openMap(m.id)}catch(err){toast(err.message);return false}
+   }}],{onOpen:d=>{$('#impF',d).onchange=async e=>{const fs=[...e.target.files];d.close();await importFiles(fs)}}});
+}
+window.addEventListener('dragover',e=>{e.preventDefault()});
+window.addEventListener('drop',e=>{e.preventDefault();const fs=[...(e.dataTransfer?e.dataTransfer.files:[])];if(fs.length)importFiles(fs)});
+
+/* ---------------- zip (store + read) and backups ---------------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0};
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],cd=[];let off=0,cdSize=0;
+  const now=new Date(),time=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1),date=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+  for(const f of files){
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);lh.setUint16(10,time,true);lh.setUint16(12,date,true);
+    lh.setUint32(14,crc,true);lh.setUint32(18,sz,true);lh.setUint32(22,sz,true);lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nm,f.data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);ch.setUint16(12,time,true);ch.setUint16(14,date,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,sz,true);ch.setUint32(24,sz,true);ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cd.push(new Uint8Array(ch.buffer),nm);cdSize+=46+nm.length;off+=30+nm.length+sz;
+  }
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdSize,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cd,new Uint8Array(e.buffer)],{type:'application/zip'});
+}
+async function inflateRaw(u8){
+  const ds=new DecompressionStream('deflate-raw'),w=ds.writable.getWriter();w.write(u8);w.close();
+  return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+}
+async function readZip(buf){
+  const u=new Uint8Array(buf),v=new DataView(buf);let e=-1;
+  for(let i=u.length-22;i>=Math.max(0,u.length-65600);i--)if(v.getUint32(i,true)===0x06054b50){e=i;break}
+  if(e<0)throw new Error('Not a zip file');
+  const n=v.getUint16(e+10,true);let p=v.getUint32(e+16,true);const out=[],dec=new TextDecoder();
+  for(let i=0;i<n;i++){
+    if(v.getUint32(p,true)!==0x02014b50)throw new Error('Damaged zip file');
+    const method=v.getUint16(p+10,true),csz=v.getUint32(p+20,true),nl=v.getUint16(p+28,true),xl=v.getUint16(p+30,true),cl=v.getUint16(p+32,true),lo=v.getUint32(p+42,true);
+    const name=dec.decode(u.subarray(p+46,p+46+nl));
+    const ln=v.getUint16(lo+26,true),lx=v.getUint16(lo+28,true),ds=lo+30+ln+lx;
+    let data=u.subarray(ds,ds+csz);
+    if(method===8)data=await inflateRaw(data);else if(method!==0)throw new Error('Unsupported zip compression');
+    if(!name.endsWith('/'))out.push({name,data});
+    p+=46+nl+xl+cl;
+  }
+  return out;
+}
+async function buildBackupZip(){
+  await saveMap();
+  const enc=new TextEncoder(),maps=await DB.all('maps'),snaps=await DB.all('snaps'),files=[];
+  for(const m of maps)files.push({name:`maps/${safeName(m.title)}-${m.id}.json`,data:enc.encode(JSON.stringify(m))});
+  const by={};for(const s of snaps)(by[s.mapId]=by[s.mapId]||[]).push(s);
+  for(const id in by)files.push({name:`history/${id}.json`,data:enc.encode(JSON.stringify(by[id]))});
+  files.push({name:'README.txt',data:enc.encode('Simple Mind Map backup\nmaps/ has one JSON file per map. history/ has saved versions.\nRestore with Import > choose this .zip in Simple Mind Map.\nYou can also open any maps/*.json with Import.\n')});
+  return makeZip(files);
+}
+const dateStr=()=>new Date().toISOString().slice(0,10);
+async function downloadBackup(){
+  const blob=await buildBackupZip();
+  download(`simple-mind-map-backup-${dateStr()}.zip`,blob);
+  S.set.lastBackup=Date.now();await saveSettings();toast('Backup downloaded');
+}
+async function restoreZip(buf){
+  const files=await readZip(buf),dec=new TextDecoder(),hist={};let n=0;
+  for(const f of files)if(/^history\/.+\.json$/.test(f.name)){try{hist[f.name.replace(/^history\/|\.json$/g,'')]=JSON.parse(dec.decode(f.data))}catch{}}
+  for(const f of files){
+    if(!/^maps\/.+\.json$/.test(f.name))continue;
+    let m;try{m=JSON.parse(dec.decode(f.data))}catch{continue}
+    if(!m||!m.root||!m.id)continue;
+    delete m.dbx;
+    const ex=await DB.get('maps',m.id);
+    if(!ex){
+      await DB.put('maps',m);upsertList(m);n++;
+      for(const s of hist[m.id]||[]){const c={...s};delete c.id;await DB.put('snaps',c)}
+    }else if(JSON.stringify(ex.root)!==JSON.stringify(m.root)||ex.title!==m.title){
+      const c={...m,id:uid(),title:(m.title||'Map')+' (restored)'};await DB.put('maps',c);upsertList(c);n++;
+    }
+  }
+  if(!n)toast('Nothing new to restore from that backup');
+  return n;
+}
+
+/* ---------------- Dropbox (PKCE, no server) ---------------- */
+const b64url=u8=>btoa(String.fromCharCode(...u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const TOKEN_URL='https://api.dropboxapi.com/oauth2/token';
+const DBX={
+  redirect:()=>location.origin+location.pathname,
+  tok:()=>DB.meta('dbxTok'),
+  async connected(){const t=await DBX.tok();return !!(t&&t.refresh)},
+  async begin(){
+    const key=(S.set.dbxKey||'').trim();if(!key)throw new Error('Enter your Dropbox app key first');
+    const ver=b64url(crypto.getRandomValues(new Uint8Array(48))),st=b64url(crypto.getRandomValues(new Uint8Array(12)));
+    const ch=b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ver))));
+    sessionStorage.setItem('smm.pkce',JSON.stringify({ver,st,key}));
+    location.href='https://www.dropbox.com/oauth2/authorize?'+new URLSearchParams({client_id:key,response_type:'code',code_challenge:ch,code_challenge_method:'S256',token_access_type:'offline',redirect_uri:DBX.redirect(),state:st});
+  },
+  async finish(code,state){
+    const p=JSON.parse(sessionStorage.getItem('smm.pkce')||'null');
+    if(!p||p.st!==state)throw new Error('Sign-in did not match this browser session. Please try again.');
+    sessionStorage.removeItem('smm.pkce');
+    const r=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({code,grant_type:'authorization_code',code_verifier:p.ver,client_id:p.key,redirect_uri:DBX.redirect()})});
+    const j=await r.json();if(!r.ok)throw new Error(j.error_description||j.error||'Sign-in failed');
+    await DB.setMeta('dbxTok',{access:j.access_token,refresh:j.refresh_token,exp:Date.now()+j.expires_in*1000-60000,key:p.key});
+    S.set.dbxKey=p.key;await saveSettings();
+  },
+  async access(){
+    const t=await DBX.tok();if(!t)throw new Error('Not connected to Dropbox');
+    if(Date.now()<t.exp)return t.access;
+    const r=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',refresh_token:t.refresh,client_id:t.key})});
+    const j=await r.json();
+    if(!r.ok){if(j.error==='invalid_grant')await DB.setMeta('dbxTok',null);const e=new Error(j.error_description||'Dropbox sign-in expired');e.auth=true;throw e}
+    t.access=j.access_token;t.exp=Date.now()+j.expires_in*1000-60000;await DB.setMeta('dbxTok',t);return t.access;
+  },
+  async err(r){let t='';try{t=await r.text()}catch{}const e=new Error((t||('HTTP '+r.status)).slice(0,200));e.status=r.status;e.body=t;if(r.status===401)e.auth=true;return e},
+  async rpc(ep,body){
+    const a=await DBX.access(),r=await fetch('https://api.dropboxapi.com/2/'+ep,{method:'POST',headers:{Authorization:'Bearer '+a,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw await DBX.err(r);return r.json();
+  },
+  arg:o=>JSON.stringify(o).replace(/[\u007f-￿]/g,c=>'\\u'+('0000'+c.charCodeAt(0).toString(16)).slice(-4)),
+  async upload(path,bytes,mode){
+    const a=await DBX.access(),r=await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path,mode,autorename:false,mute:true}),'Content-Type':'application/octet-stream'},body:bytes});
+    if(!r.ok)throw await DBX.err(r);return r.json();
+  },
+  async download(path){
+    const a=await DBX.access(),r=await fetch('https://content.dropboxapi.com/2/files/download',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path})}});
+    if(!r.ok)throw await DBX.err(r);
+    return {text:await r.text(),meta:JSON.parse(r.headers.get('dropbox-api-result')||'{}')};
+  },
+  remove:path=>DBX.rpc('files/delete_v2',{path}),
+  async list(path){
+    try{
+      let j=await DBX.rpc('files/list_folder',{path,recursive:false,limit:2000}),all=j.entries;
+      while(j.has_more){j=await DBX.rpc('files/list_folder/continue',{cursor:j.cursor});all=all.concat(j.entries)}
+      return all;
+    }catch(e){if(e.status===409&&/not_found/.test(e.body||''))return [];throw e}
+  }
+};
+const mapPayload=m=>new TextEncoder().encode(JSON.stringify({smm:1,id:m.id,title:m.title,created:m.created,updated:m.updated,root:m.root}));
+function setSync(state,msg=''){S.sync.state=state;S.sync.msg=msg;if(state==='ok')S.sync.last=Date.now();renderSync()}
+let syncing=false;
+const scheduleSync=debounce(()=>{syncAll().catch(()=>{})},5000);
+async function applyRemote(m,remote,rev){
+  const open=S.map&&S.map.id===m.id;
+  if(open){await takeSnapshot({force:true,summary:'Before Dropbox update'}).catch(()=>{})}
+  else{const snaps=await DB.snapsOf(m.id);const data=JSON.stringify({t:m.title,r:m.root});if(!snaps.some(s=>s.data===data))await DB.put('snaps',{mapId:m.id,ts:Date.now(),name:null,title:m.title,data,nodes:countNodes(m.root),summary:'Before Dropbox update'})}
+  m.root=remote.root;m.title=remote.title||m.title;m.updated=remote.updated||Date.now();m.dbx={rev,lv:m.lv||0};
+  if(open){S.map.root=m.root;S.map.title=m.title;S.map.updated=m.updated;S.map.dbx=m.dbx;S.map.lv=m.lv;S.undo=[];S.redo=[];buildIndex();if(!N(S.sel))S.sel=m.root.id;await DB.put('maps',S.map);render()}
+  else await DB.put('maps',m);
+  upsertList(m);
+}
+async function syncAll(o={}){
+  if(syncing||!(await DBX.connected()))return;
+  if(!o.manual&&!S.set.autoSync)return;
+  syncing=true;setSync('busy');
+  let up=0,down=0,conf=0;
+  try{
+    await saveMap(true);
+    const rmap=new Map();
+    for(const e of await DBX.list('/maps')){const m=/^([a-z0-9]+)\.smm\.json$/.exec(e.name);if(m&&e['.tag']==='file')rmap.set(m[1],e)}
+    const locals=await DB.all('maps');
+    for(let m of locals){
+      if(S.map&&S.map.id===m.id)m=S.map;
+      const r=rmap.get(m.id),dirty=(m.lv||0)>(m.dbx?m.dbx.lv:0),path=`/maps/${m.id}.smm.json`;
+      const put=async mode=>{const res=await DBX.upload(path,mapPayload(m),mode);m.dbx={rev:res.rev,lv:m.lv||0};await DB.put('maps',m);up++};
+      if(!r){await put({'.tag':'add'});continue}
+      if(m.dbx&&m.dbx.rev===r.rev){if(dirty)await put({'.tag':'update',update:r.rev});continue}
+      const dl=await DBX.download(path);let remote;try{remote=JSON.parse(dl.text)}catch{continue}
+      const rev=dl.meta.rev||r.rev;
+      if(JSON.stringify(remote.root)===JSON.stringify(m.root)&&remote.title===m.title){m.dbx={rev,lv:m.lv||0};await DB.put('maps',m);continue}
+      if(m.dbx&&!dirty){await applyRemote(m,remote,rev);down++;continue}
+      const copy={...mkMap((remote.title||'Map')+' (Dropbox copy)',remote.root)};await DB.put('maps',copy);upsertList(copy);conf++;
+      const res=await DBX.upload(path,mapPayload(m),{'.tag':'update',update:rev});m.dbx={rev:res.rev,lv:m.lv||0};await DB.put('maps',m);up++;
+    }
+    for(const [id,r] of rmap){
+      if(locals.some(m=>m.id===id)||(S.set.ignore||[]).includes(id))continue;
+      const dl=await DBX.download(`/maps/${id}.smm.json`);let remote;try{remote=JSON.parse(dl.text)}catch{continue}
+      if(!remote||!remote.root)continue;
+      const m={smm:1,id,title:remote.title||'Map',created:remote.created||Date.now(),updated:remote.updated||Date.now(),root:remote.root,view:null};
+      m.dbx={rev:dl.meta.rev||r.rev,lv:m.lv||0};await DB.put('maps',m);upsertList(m);down++;
+    }
+    setSync('ok');
+    if(conf)toast(conf+' map'+(conf>1?'s':'')+' changed on two devices. Your version was kept and the Dropbox version was saved as a copy.');
+    else if(o.manual)toast(`Dropbox synced (${up} uploaded, ${down} downloaded)`);
+  }catch(err){
+    if(err.auth)setSync('warn','Dropbox sign-in expired. Reconnect in Settings.');
+    else if(err.status===409)setSync('err','conflict, will retry'),scheduleSync();
+    else setSync('err',(err.message||'').slice(0,60));
+    if(o.manual)toast('Dropbox sync failed: '+(err.message||'').slice(0,120));
+  }finally{syncing=false}
+}
+async function backupToDropbox(){
+  const blob=await buildBackupZip(),bytes=new Uint8Array(await blob.arrayBuffer());
+  await DBX.upload(`/backups/simple-mind-map-backup-${dateStr()}.zip`,bytes,{'.tag':'overwrite'});
+  S.set.lastBackup=Date.now();await saveSettings();
+}
+async function maybeAutoBackup(){
+  if(!S.set.autoBackup||!(await DBX.connected()))return;
+  if(Date.now()-(S.set.lastBackup||0)<7*864e5)return;
+  try{await backupToDropbox();toast('Weekly backup saved to Dropbox')}catch(e){}
+}
+
+/* ---------------- maps list, templates ---------------- */
+const T=(t,c=[],x)=>({id:uid(),t,c,...(x||{})});
+const TEMPLATES={
+  blank:{label:'Blank',make:()=>mkMap('Untitled map',T('Central idea'))},
+  brainstorm:{label:'Brainstorm',make:()=>mkMap('Brainstorm',T('Topic',[T('Ideas',[T('')]),T('Questions'),T('Next steps')]))},
+  project:{label:'Project plan',make:()=>mkMap('Project plan',T('Project',[
+    T('Goals'),T('Milestones'),
+    T('Tasks',[T('First task',[],{k:false}),T('Second task',[],{k:false}),T('Third task',[],{k:false})]),
+    T('Risks'),T('Resources')]))}
+};
+function welcomeMap(){
+  const m=mkMap('Welcome to Simple Mind Map',T('Simple Mind Map',[
+    T('Get started',[T('Click a node to select it'),T('Tab adds a child'),T('Enter adds a sibling'),T('Double-click or F2 edits the text'),T('Drag a node onto another to move it')]),
+    T('Move around',[T('Drag the background to pan'),T('Mouse wheel or pinch to zoom'),T('Arrow keys change the selection'),T('Levels 1 to 4 limit how deep the map shows'),T('Use the outline on the left to jump')]),
+    T('Your data',[T('Saved in this browser as you type'),T('Versions keeps history you can restore'),T('Backup downloads a zip of everything'),T('Dropbox sync is in Settings')]),
+    T('Details',[T('Notes, tags and due dates live in the details panel',[],{tg:['tip']}),T('Mark a node as a task to track progress',[],{k:false}),T('Search with / or Ctrl+F')]),
+    T('Export',[T('FreeMind and OPML'),T('Markdown and draw.io'),T('SVG and PNG pictures')]),
+    T('Shortcuts',[T('Ctrl+K opens every command'),T('Paste an indented list to create nodes'),T('Press ? for the full list')])
+  ]));
+  return m;
+}
+async function createMap(kind){
+  await saveMap();const m=TEMPLATES[kind].make();await saveNewMap(m);await openMap(m.id);
+  if(kind==='blank'||kind==='brainstorm')startEdit(m.root.id);
+}
+async function openMap(id){
+  if(S.map){await saveMap(true);await takeSnapshot().catch(()=>{})}
+  const m=await DB.get('maps',id);if(!m)return;
+  S.map=m;S.undo=[];S.redo=[];S.sel=m.root.id;S.focus=null;S.q='';S.tag='';$('#q').value='';S.matchPos=-1;
+  S.level=m.ui&&m.ui.level!==undefined?m.ui.level:null;if(m.ui&&m.ui.layout)S.layout=m.ui.layout;
+  S.view=m.view?{...m.view}:{x:0,y:0,k:1};
+  try{localStorage.setItem('smm.last',id)}catch{}
+  document.title=m.title+' · Simple Mind Map';
+  upsertList(m);buildIndex();render();if(!m.view)fitView();
+}
+async function deleteMap(id){
+  const row=S.maps.find(m=>m.id===id);if(!row)return;
+  const connected=await DBX.connected();
+  const ok=await confirmBox(`Delete “${row.title}” from this device? This also removes its saved versions.`+(connected?' It stays in Dropbox unless you choose to remove it there next.':''),'Delete',true);
+  if(ok!==true)return;
+  let removeRemote=false;
+  if(connected)removeRemote=(await confirmBox('Also delete “'+row.title+'” from Dropbox? (Dropbox keeps deleted files recoverable for a while.)','Delete from Dropbox',true))===true;
+  await DB.del('maps',id);await DB.delSnapsOf(id);S.maps=S.maps.filter(m=>m.id!==id);
+  if(connected){if(removeRemote){try{await DBX.remove(`/maps/${id}.smm.json`)}catch{}}else{S.set.ignore=(S.set.ignore||[]).concat(id);await saveSettings()}}
+  if(S.map&&S.map.id===id){
+    S.map=null;
+    if(!S.maps.length){const m=TEMPLATES.blank.make();await saveNewMap(m);await openMap(m.id)}
+    else await openMap(S.maps.slice().sort((a,b)=>b.updated-a.updated)[0].id);
+  }
+}
+async function duplicateMap(id){
+  await saveMap();const m=await DB.get('maps',id);if(!m)return;
+  const c={...structuredClone(m),id:uid(),title:m.title+' (copy)',created:Date.now(),updated:Date.now(),dbx:undefined};
+  (function re(n){n.id=uid();n.c.forEach(re)})(c.root);
+  delete c.dbx;await saveNewMap(c);return c;
+}
+function openMaps(){
+  const rows=(f)=>S.maps.slice().sort((a,b)=>b.updated-a.updated).filter(m=>!f||m.title.toLowerCase().includes(f.toLowerCase())).map(m=>
+    `<div data-id="${m.id}" style="cursor:pointer"><div class="grow" data-open><b>${esc(m.title)}${S.map&&S.map.id===m.id?' <span class="pill">open</span>':''}</b><div class="small mut">${m.nodes} nodes · edited ${esc(ago(m.updated))}</div></div><button class="btn sm" data-dup aria-label="Duplicate ${esc(m.title)}">${ic('copy',14)}</button><button class="btn sm dng" data-del aria-label="Delete ${esc(m.title)}">${ic('trash',14)}</button></div>`).join('')||'<div class="mut">No maps match.</div>';
+  modal('Maps',`<div class="row" style="flex-wrap:wrap;margin-bottom:10px">${Object.entries(TEMPLATES).map(([k,t])=>`<button class="btn" data-new="${k}">${ic('plus',14)}${esc(t.label)}</button>`).join('')}<button class="btn" id="mImp">${ic('upload',14)}Import…</button></div>
+    <input class="in" id="mFilter" placeholder="Filter maps" aria-label="Filter maps"><div class="list" id="mList" style="margin-top:8px">${rows('')}</div>`,[{label:'Close'}],{onOpen:d=>{
+      $('#mFilter',d).oninput=e=>{$('#mList',d).innerHTML=rows(e.target.value)};
+      $('#mImp',d).onclick=()=>{d.close();openImport()};
+      d.querySelector('.db').onclick=async e=>{
+        const nb=e.target.closest('[data-new]');if(nb){d.close();await createMap(nb.dataset.new);return}
+        const r=e.target.closest('[data-id]');if(!r)return;const id=r.dataset.id;
+        if(e.target.closest('[data-del]')){d.close();await deleteMap(id);openMaps();return}
+        if(e.target.closest('[data-dup]')){const c=await duplicateMap(id);d.close();await openMap(c.id);return}
+        d.close();await openMap(id);
+      };
+    }});
+}
+
+/* ---------------- settings, help, palette ---------------- */
+function applyTheme(){
+  const t=S.set.theme,dark=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const mt=$('meta[name=theme-color]');if(mt)mt.content=dark?'#16181A':'#F4F4F1';
+  if(S.map)render();
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(S.set.theme==='auto')applyTheme()});
+const isPhone=()=>matchMedia('(max-width:860px)').matches;
+function applyPanels(){document.body.classList.toggle('noOutline',!S.set.outline);document.body.classList.toggle('noInsp',!S.set.insp)}
+function togglePanel(which){
+  const el=$(which==='outline'?'#outline':'#insp');
+  if(isPhone()){const other=$(which==='outline'?'#insp':'#outline');other.classList.remove('open');el.classList.toggle('open')}
+  else{S.set[which==='outline'?'outline':'insp']=!S.set[which==='outline'?'outline':'insp'];applyPanels();saveUi();saveSettings();drawMini()}
+}
+function closePanel(which){if(isPhone())$(which==='outline'?'#outline':'#insp').classList.remove('open');else togglePanel(which)}
+async function openSettings(){
+  const conn=await DBX.connected(),lb=S.set.lastBackup;
+  const est=navigator.storage&&navigator.storage.estimate?await navigator.storage.estimate().catch(()=>null):null;
+  const persisted=navigator.storage&&navigator.storage.persisted?await navigator.storage.persisted().catch(()=>false):false;
+  modal('Settings',`
+   <div class="grp" style="display:block;padding-top:0">Appearance</div>
+   <div class="srow"><label for="sTheme">Theme</label><select id="sTheme" class="in" style="width:auto"><option value="auto">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+   <div class="grp" style="display:block">Dropbox sync</div>
+   <div class="small mut">Each map is kept as a file in your Dropbox app folder. Create a Dropbox app (scoped access, app folder) with the <b>files.content.read</b> and <b>files.content.write</b> permissions, add the redirect address below, and paste its app key here.</div>
+   <label class="field" for="sKey">Dropbox app key</label><input class="in" id="sKey" autocomplete="off" spellcheck="false" value="${esc(S.set.dbxKey||'')}">
+   <div class="small mut" style="margin-top:6px">Redirect address to add in the Dropbox console:<br><code style="word-break:break-all">${esc(DBX.redirect())}</code></div>
+   <div class="row" style="flex-wrap:wrap;margin-top:10px"><span class="pill">${conn?'Connected':'Not connected'}</span>
+    ${conn?`<button class="btn" id="sSync">${ic('cloud',14)}Sync now</button><button class="btn dng" id="sDis">Disconnect</button>`:`<button class="btn pri" id="sCon">${ic('cloud',14)}Connect Dropbox</button>`}</div>
+   <div class="srow"><label for="sAuto">Sync automatically after changes</label><input type="checkbox" id="sAuto"${S.set.autoSync?' checked':''}></div>
+   <div class="srow"><label for="sWeekly">Back up to Dropbox weekly</label><input type="checkbox" id="sWeekly"${S.set.autoBackup?' checked':''}></div>
+   <div class="grp" style="display:block">Backup and storage</div>
+   <div class="small mut" id="sBk">${lb?'Last backup: '+esc(new Date(lb).toLocaleString())+' ('+esc(ago(lb))+')':'No backup yet.'}</div>
+   <div class="row" style="flex-wrap:wrap;margin-top:8px"><button class="btn" id="sDl">${ic('archive',14)}Download backup</button>${conn?`<button class="btn" id="sBd">${ic('cloud',14)}Back up to Dropbox now</button>`:''}<label class="btn" style="cursor:pointer">${ic('upload',14)}Restore backup<input type="file" id="sRest" accept=".zip" hidden></label></div>
+   <div class="srow" style="margin-top:8px"><span class="small">Browser storage: ${persisted?'<b>protected</b> from automatic clean-up':'not yet protected from automatic clean-up'}${est&&est.usage!=null?' · using '+(est.usage/1048576).toFixed(1)+' MB':''}</span>${persisted?'':'<button class="btn sm" id="sPersist">Request protection</button>'}</div>
+   <div class="small mut" style="margin-top:14px">Simple Mind Map keeps everything in this browser unless you connect Dropbox. Clearing site data removes local maps, so keep a backup.</div>`,
+   [{label:'Done',primary:true}],{onOpen:d=>{
+     $('#sTheme',d).value=S.set.theme;
+     $('#sTheme',d).onchange=async e=>{S.set.theme=e.target.value;await saveSettings();applyTheme()};
+     $('#sKey',d).onchange=async e=>{S.set.dbxKey=e.target.value.trim();await saveSettings()};
+     $('#sAuto',d).onchange=async e=>{S.set.autoSync=e.target.checked;await saveSettings()};
+     $('#sWeekly',d).onchange=async e=>{S.set.autoBackup=e.target.checked;await saveSettings()};
+     const on=(id,fn)=>{const el=$(id,d);if(el)el.onclick=fn};
+     on('#sCon',async()=>{try{S.set.dbxKey=$('#sKey',d).value.trim();await saveSettings();await saveMap(true);await DBX.begin()}catch(e){toast(e.message)}});
+     on('#sDis',async()=>{await DB.setMeta('dbxTok',null);setSync('off');d.close();toast('Dropbox disconnected. Your maps stay on this device.')});
+     on('#sSync',async()=>{d.close();await syncAll({manual:true})});
+     on('#sDl',async()=>{try{await downloadBackup();$('#sBk',d).textContent='Last backup: just now'}catch(e){toast('Backup failed: '+e.message)}});
+     on('#sBd',async()=>{try{await backupToDropbox();$('#sBk',d).textContent='Last backup: just now (Dropbox)';toast('Backup saved to Dropbox')}catch(e){toast('Backup failed: '+e.message)}});
+     on('#sPersist',async()=>{const ok=navigator.storage.persist&&await navigator.storage.persist();toast(ok?'Browser storage is now protected':'The browser declined. Installing the app or using it more often can help.')});
+     $('#sRest',d).onchange=async e=>{const f=e.target.files[0];if(!f)return;d.close();try{const n=await restoreZip(await f.arrayBuffer());if(n)toast('Restored '+n+(n===1?' map':' maps'));if(S.map)render()}catch(err){toast('Restore failed: '+err.message)}};
+   }});
+}
+function openHelp(){
+  const rows=[['Tab','Add a child'],['Enter','Add a sibling (Shift+Enter: before)'],['F2 or double-click','Edit text'],['Enter / Esc (while editing)','Finish / cancel'],['Delete','Delete the branch'],['Space','Collapse or expand'],['Arrow keys','Move the selection'],['Alt + ↑ ↓','Reorder among siblings'],['Alt + → ←','Indent / outdent'],['Ctrl+C, X, V','Copy, cut, paste branches or text lists'],['Ctrl+D','Duplicate'],['Ctrl+Z, Ctrl+Y','Undo, redo'],['Ctrl+S','Save a named version'],['/ or Ctrl+F','Search (Enter for next match)'],['Ctrl+K','Command palette'],['+ − 0','Zoom in, out, fit'],['Drag a node onto another','Move it there'],['Drag background / wheel / pinch','Pan and zoom']];
+  modal('Keyboard and mouse',`<div class="list">${rows.map(([k,v])=>`<div><kbd style="min-width:120px">${esc(k)}</kbd><span class="grow">${esc(v)}</span></div>`).join('')}</div>`);
+}
+function commandList(){
+  const sel=selNode(),root=sel&&!sel.p,c=[];
+  const add=(name,key,run,off)=>{if(!off)c.push({name,key,run})};
+  add('Add child','Tab',cmd.addChild);add('Add sibling','Enter',()=>cmd.addSibling());add('Edit text','F2',cmd.edit);
+  add('Delete node','Del',cmd.del,root);add('Duplicate node','Ctrl+D',cmd.dup,root);
+  add('Move up','Alt+↑',cmd.up,root);add('Move down','Alt+↓',cmd.down,root);add('Indent','Alt+→',cmd.indent,root);add('Outdent','Alt+←',cmd.outdent,root);
+  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Collapse all','',cmd.collapseAll);
+  [1,2,3,4].forEach(n=>add('Show '+n+(n===1?' level':' levels'),'',()=>cmd.setLevel(n)));add('Show all levels','',()=>cmd.setLevel(null));
+  add(S.focus?'Exit focus':'Focus on this branch','',cmd.focus);add('Fit map to screen','0',cmd.fit);add('Zoom in','+',cmd.zoomIn);add('Zoom out','−',cmd.zoomOut);
+  add('Undo','Ctrl+Z',undo);add('Redo','Ctrl+Y',redo);add('Search nodes','/',cmd.search);add('Next search match','',()=>jumpMatch(1));
+  add('Layout: both sides','',()=>{S.layout='both';saveUi();render();fitView(true)});add('Layout: right only','',()=>{S.layout='right';saveUi();render();fitView(true)});
+  add('Show or hide outline','',()=>togglePanel('outline'));add('Show or hide details','',()=>togglePanel('insp'));
+  add('Theme: match device','',()=>{S.set.theme='auto';saveSettings();applyTheme()});add('Theme: light','',()=>{S.set.theme='light';saveSettings();applyTheme()});add('Theme: dark','',()=>{S.set.theme='dark';saveSettings();applyTheme()});
+  add('New map','',()=>createMap('blank'));add('Open maps','',openMaps);add('Import…','',openImport);add('Export…','',openExport);
+  add('Version history','',openVersions);add('Name this version','Ctrl+S',saveNamedVersion);
+  add('Download backup (zip)','',()=>downloadBackup().catch(e=>toast(e.message)));add('Sync with Dropbox now','',()=>syncAll({manual:true}));
+  add('Settings','',openSettings);add('Keyboard shortcuts','?',openHelp);
+  return c;
+}
+function openPalette(){
+  hidePop();
+  const d=$('#pal'),inp=$('#palIn'),res=$('#palRes');let items=[],on=0;
+  const draw=()=>{res.innerHTML=items.map((c,i)=>`<button role="option" data-i="${i}" class="${i===on?'on':''}" aria-selected="${i===on}"><span>${esc(c.name)}</span>${c.key?`<kbd>${esc(c.key)}</kbd>`:''}</button>`).join('')||'<div class="mut" style="padding:10px">No matching command</div>';const cur=res.querySelector('.on');cur&&cur.scrollIntoView({block:'nearest'})};
+  const filter=()=>{const q=inp.value.toLowerCase().split(/\s+/).filter(Boolean);items=commandList().filter(c=>q.every(w=>c.name.toLowerCase().includes(w))).slice(0,40);on=0;draw()};
+  const run=i=>{const c=items[i];if(!c)return;d.close();setTimeout(()=>c.run(),0)};
+  if(d.open)d.close();inp.value='';filter();d.showModal();inp.focus();
+  inp.oninput=filter;
+  inp.onkeydown=e=>{
+    if(e.key==='ArrowDown'){e.preventDefault();on=Math.min(on+1,items.length-1);draw()}
+    else if(e.key==='ArrowUp'){e.preventDefault();on=Math.max(on-1,0);draw()}
+    else if(e.key==='Enter'){e.preventDefault();run(on)}
+  };
+  res.onclick=e=>{const b=e.target.closest('[data-i]');if(b)run(+b.dataset.i)};
+  d.onclick=e=>{if(e.target===d)d.close()};
+}
+
+/* ---------------- wiring ---------------- */
+$('#lvl').addEventListener('click',e=>{const b=e.target.closest('button');if(b)cmd.setLevel(b.dataset.v===''?null:+b.dataset.v)});
+$('#lay').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.layout=b.dataset.v;saveUi();saveSoon();render();fitView(true)});
+$('#tagSel').addEventListener('change',e=>{S.tag=e.target.value;renderMap();renderOutline()});
+$('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
+$('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;
+$('#btnVersions').onclick=openVersions;$('#btnExport').onclick=openExport;$('#btnMaps').onclick=openMaps;
+$('#btnMore').onclick=e=>popAt(e.currentTarget,[
+  {label:'New map',run:()=>createMap('blank')},{label:'Maps…',run:openMaps},{label:'Import…',run:openImport},{label:'Export…',run:openExport},'-',
+  {label:'Version history',run:openVersions},{label:'Name this version',key:'Ctrl+S',run:saveNamedVersion},{label:'Download backup',run:()=>downloadBackup().catch(err=>toast(err.message))},'-',
+  {label:'Show or hide outline',run:()=>togglePanel('outline')},{label:'Show or hide details',run:()=>togglePanel('insp')},{label:'Command palette',key:'Ctrl+K',run:openPalette},'-',
+  {label:'Settings and sync',run:openSettings},{label:'Keyboard shortcuts',key:'?',run:openHelp}]);
+$('#btnTogO').onclick=()=>togglePanel('outline');$('#btnTogI').onclick=()=>togglePanel('insp');
+$('#btnOutlineX').onclick=()=>closePanel('outline');$('#btnInspX').onclick=()=>closePanel('insp');
+$('#dMaps').onclick=openMaps;$('#dOutline').onclick=()=>togglePanel('outline');$('#dInsp').onclick=()=>togglePanel('insp');
+$('#dChild').onclick=()=>cmd.addChild();$('#dSib').onclick=()=>cmd.addSibling();
+$('#zIn').onclick=cmd.zoomIn;$('#zOut').onclick=cmd.zoomOut;$('#zVal').onclick=cmd.zoomReset;$('#zFit').onclick=cmd.fit;
+$('#stage').addEventListener('click',e=>{if(e.target.closest('#crumbX'))cmd.focus()});
+$('#title').addEventListener('change',e=>{const v=e.target.value.trim()||'Untitled map';commit(()=>{S.map.title=v},{key:'title'});document.title=v+' · Simple Mind Map'});
+$('#title').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
+$('#q').addEventListener('input',e=>{S.q=e.target.value;S.matchPos=-1;renderMap();renderOutline()});
+$('#otree').addEventListener('click',e=>{
+  const row=e.target.closest('.orow');if(!row)return;const id=row.dataset.id;
+  if(e.target.closest('[data-tog]')){const x=N(id);if(x&&x.n.c.length)commit(()=>{x.n.x=x.n.x===true?false:true});return}
+  select(id,{reveal:true,center:true});if(isPhone())$('#outline').classList.remove('open');
+});
+$('#otree').addEventListener('dblclick',e=>{const row=e.target.closest('.orow');if(row&&!e.target.closest('[data-tog]')){if(isPhone())$('#outline').classList.remove('open');startEdit(row.dataset.id)}});
+$('#inspBody').addEventListener('change',e=>{
+  const t=e.target,id=S.sel;if(!N(id))return;
+  if(t.id==='iText')commit(()=>{N(id).n.t=t.value.replace(/\s+$/,'')},{key:'t'+id});
+  else if(t.id==='iNote')commit(()=>{const n=N(id).n;if(t.value.trim())n.n=t.value;else delete n.n},{key:'n'+id});
+  else if(t.id==='iTask')commit(()=>{const n=N(id).n;if(t.checked)n.k=false;else delete n.k});
+  else if(t.id==='iDone')commit(()=>{N(id).n.k=t.checked});
+  else if(t.id==='iPri')commit(()=>{const n=N(id).n,v=+t.value;if(v)n.p=v;else delete n.p});
+  else if(t.id==='iDue')commit(()=>{const n=N(id).n;if(t.value)n.d=t.value;else delete n.d});
+});
+function addTag(v){
+  const tag=String(v).trim().replace(/^#+/,'').replace(/\s+/g,'-').slice(0,30);if(!tag)return;
+  const id=S.sel;commit(()=>{const n=N(id).n;n.tg=n.tg||[];if(!n.tg.includes(tag))n.tg.push(tag)});
+}
+$('#inspBody').addEventListener('keydown',e=>{if(e.target.id==='iTag'&&(e.key==='Enter'||e.key===',')){e.preventDefault();addTag(e.target.value);const i=$('#iTag');i&&i.focus()}});
+$('#inspBody').addEventListener('click',e=>{
+  const id=S.sel,b=e.target.closest('button');if(!b||!N(id))return;
+  if(b.dataset.rmtag!==undefined)commit(()=>{const n=N(id).n;n.tg=(n.tg||[]).filter(t=>t!==b.dataset.rmtag);if(!n.tg.length)delete n.tg});
+  else if(b.dataset.col!==undefined)commit(()=>{const n=N(id).n;if(b.dataset.col==='')delete n.col;else n.col=+b.dataset.col});
+  else if(b.dataset.act)cmd[b.dataset.act]&&cmd[b.dataset.act]();
+});
+window.addEventListener('resize',()=>{if(S.editing)placeEditor();drawMini()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&S.map){saveMap(true);takeSnapshot({force:true}).catch(()=>{})}});
+window.addEventListener('pagehide',()=>{if(S.map)saveMap(true)});
+setInterval(renderSync,60000);
+
+/* ---------------- start ---------------- */
+async function init(){
+  hydrateIcons();
+  await DB.open();
+  const set=await DB.meta('settings');if(set)Object.assign(S.set,set);
+  if(!S.set.firstRun){S.set.firstRun=Date.now();await saveSettings()}
+  let ui={};try{ui=JSON.parse(localStorage.getItem('smm.ui')||'{}')}catch{}
+  S.layout=ui.layout||'both';if(ui.outline!==undefined)S.set.outline=ui.outline;if(ui.insp!==undefined)S.set.insp=ui.insp;
+  applyPanels();
+  const qs=new URLSearchParams(location.search);
+  if(qs.get('code')&&qs.get('state')){
+    try{await DBX.finish(qs.get('code'),qs.get('state'));toast('Dropbox connected')}catch(e){toast('Dropbox sign-in failed: '+e.message)}
+    history.replaceState(null,'',location.pathname);
+  }else if(qs.get('error')){toast('Dropbox: '+(qs.get('error_description')||qs.get('error')));history.replaceState(null,'',location.pathname)}
+  S.maps=(await DB.all('maps')).map(m=>({id:m.id,title:m.title,updated:m.updated,nodes:countNodes(m.root)}));
+  if(!S.maps.length){await saveNewMap(welcomeMap())}
+  let last=null;try{last=localStorage.getItem('smm.last')}catch{}
+  const id=S.maps.some(m=>m.id===last)?last:S.maps.slice().sort((a,b)=>b.updated-a.updated)[0].id;
+  S.set.theme=S.set.theme||'auto';
+  const t=S.set.theme;document.documentElement.dataset.theme=(t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches))?'dark':'light';
+  await openMap(id);
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  if(await DBX.connected()){setSync('busy');syncAll({manual:false}).then(maybeAutoBackup)}
+  const since=Date.now()-(S.set.lastBackup||S.set.firstRun||Date.now());
+  if(since>7*864e5&&!(S.set.autoBackup&&await DBX.connected()))setTimeout(()=>toast(`It has been ${Math.round(since/864e5)} days since your last backup.`,'Back up',()=>downloadBackup().catch(e=>toast(e.message)),12000),2500);
+  if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+  window.SMM={S,cmd,commit,render,toMD,toOPML,toMM,drawioXml,toSVG,parseIndented,parseOPML,parseMM,makeZip,readZip,computeLayout,diffTrees,takeSnapshot,DB,syncAll,DBX,openMap,importText,buildBackupZip,restoreZip,thinSnaps,select,startEdit,endEdit};
+}
+init().catch(err=>{document.body.insertAdjacentHTML('afterbegin','<div style="padding:16px;position:fixed;z-index:99;background:#fff;color:#900">Could not start Simple Mind Map: '+esc(err.message||err)+'</div>');console.error(err)});
+
+</script>
+</body>
+</html>
