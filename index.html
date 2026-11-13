@@ -83,6 +83,7 @@ mark{background:#FFE08A;color:#1D2125;border-radius:2px}
 #zoom button:last-child{border-right:0}
 #zoom .zv{width:auto;min-width:52px;font-size:12px;font-weight:600}
 #mini{position:absolute;right:12px;bottom:62px;width:150px;height:96px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);cursor:pointer}
+#foot{display:flex;justify-content:space-between;gap:12px;padding:3px 12px;font-size:11px;color:var(--mut);background:var(--surf);border-top:1px solid var(--line)}
 #hint{position:absolute;left:12px;bottom:12px;padding:6px 10px;border-radius:8px;background:var(--surf);border:1px solid var(--line);font-size:12px;color:var(--mut);max-width:calc(100% - 230px)}
 #ed{position:absolute;z-index:5;display:none;resize:none;border:2px solid var(--acc);border-radius:8px;padding:6px 12px;line-height:18px;overflow:hidden;outline:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:var(--shadow)}
 #insp .sec{padding:4px 14px 12px}
@@ -178,6 +179,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
     </main>
     <aside id="insp" aria-label="Node details"><div class="phead"><span class="lbl">Details</span><button class="ib" id="btnInspX" aria-label="Hide details" data-ic="close" data-s="16"></button></div><div id="inspBody"></div></aside>
   </div>
+  <footer id="foot"><span>Simple Mind Map</span><span id="ver"></span></footer>
   <nav id="dock" aria-label="Quick actions">
     <button id="dMaps"><span data-ic="menu"></span>Maps</button>
     <button id="dOutline"><span data-ic="list"></span>Outline</button>
@@ -192,6 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
+const APP_VERSION='1.1.0';
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -1684,6 +1687,7 @@ window.addEventListener('pagehide',()=>{if(S.map)saveMap(true)});
 setInterval(renderSync,60000);
 
 /* ---------------- start ---------------- */
+document.getElementById('ver').textContent='v'+APP_VERSION;
 async function init(){
   hydrateIcons();
   await DB.open();
