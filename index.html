@@ -194,7 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.5.0';
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -1214,6 +1214,53 @@ function toCSV(map){
   const rt=map.root.t||map.title;w(map.root,[rt],1);
   return '\ufeff'+rows.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n';
 }
+/* ---------------- JSON editor ---------------- */
+function normTree(raw){
+  const seen=new Set();let count=0;
+  const w=(n,top)=>{
+    if(!n||typeof n!=='object'||Array.isArray(n))throw new Error('Every node must be an object { "t": "text", "c": [ ... ] }');
+    if(typeof n.t!=='string')n.t=n.t==null?'':String(n.t);
+    if(n.c==null)n.c=[];if(!Array.isArray(n.c))throw new Error('"c" (children) must be a list, at “'+n.t+'”');
+    if(typeof n.id!=='string'||!n.id||seen.has(n.id))n.id=uid();seen.add(n.id);count++;
+    n.c.forEach(c=>w(c,false));return n;
+  };
+  const r=w(raw,true);return {root:r,count};
+}
+function openJSON(){
+  const pretty=()=>JSON.stringify(S.map.root,null,2);
+  modal('Edit JSON',`<div class="note">This is the map tree. Edit text, notes, tags, tasks (<code>k</code>), colors or structure, then Apply. Apply can be undone. Ctrl+Enter applies.</div>
+  <div class="row" style="margin:8px 0;flex-wrap:wrap"><input class="in grow" id="jFind" placeholder="Find in names" style="min-width:120px"><input class="in grow" id="jRep" placeholder="Replace with" style="min-width:120px"><label class="row small" style="margin:0"><input type="checkbox" id="jCase"> Match case</label><button class="btn sm" id="jDo">Replace all</button></div>
+  <textarea id="jTxt" spellcheck="false" style="width:100%;height:min(48vh,420px);font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink);white-space:pre;tab-size:2"></textarea>
+  <div id="jMsg" class="small" style="margin-top:6px"></div>`,
+  [{label:'Reload from map',run:d=>{d.querySelector('#jTxt').value=pretty();d.querySelector('#jTxt').dispatchEvent(new Event('input'));return false}},
+   {label:'Copy',run:async d=>{try{await navigator.clipboard.writeText(d.querySelector('#jTxt').value);toast('Copied')}catch{toast('Copy failed')}return false}},
+   {label:'Apply',primary:true,run:d=>{const ok=applyJSON(d);return false}},{label:'Close'}],
+  {onOpen:d=>{
+    const t=d.querySelector('#jTxt'),msg=d.querySelector('#jMsg');d.style.width='min(860px,96vw)';
+    d.addEventListener('close',()=>{d.style.width=''},{once:true});
+    t.value=pretty();
+    const check=()=>{try{const r=normTree(JSON.parse(t.value));msg.style.color='var(--mut)';msg.textContent='Valid · '+r.count+' nodes';return r}catch(e){msg.style.color='var(--danger)';msg.textContent=e.message;return null}};
+    t.addEventListener('input',check);check();
+    t.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();applyJSON(d)}
+      if(e.key==='Tab'){e.preventDefault();const a=t.selectionStart;t.setRangeText('  ',a,t.selectionEnd,'end')}});
+    d.querySelector('#jDo').onclick=()=>{
+      const f=d.querySelector('#jFind').value,rp=d.querySelector('#jRep').value;if(!f){toast('Enter text to find');return}
+      let tree;try{tree=JSON.parse(t.value)}catch(e){toast('Fix the JSON first');return}
+      const re=new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),d.querySelector('#jCase').checked?'g':'gi');let n=0;
+      (function w(x){if(x&&typeof x.t==='string'){const y=x.t.replace(re,()=>{n++;return rp});x.t=y}(x&&x.c||[]).forEach(w)})(tree);
+      t.value=JSON.stringify(tree,null,2);check();toast(n+' replaced. Press Apply to keep.');
+    };
+  }});
+}
+function applyJSON(d){
+  const t=d.querySelector('#jTxt');let r;
+  try{r=normTree(JSON.parse(t.value))}catch(e){toast('Not applied: '+e.message);return false}
+  const keep=S.sel;
+  commit(()=>{S.map.root=r.root});
+  if(!N(keep))select(S.map.root.id);
+  t.value=JSON.stringify(S.map.root,null,2);
+  toast('Applied · '+r.count+' nodes','Undo',undo);return true;
+}
 const exportable=()=>({...S.map,root:S.map.root});
 async function doExport(fmt){
   const m=exportable(),base=safeName(m.title);
@@ -1649,7 +1696,7 @@ function commandList(){
   add('Add child','Tab',cmd.addChild);add('Add sibling','Enter',()=>cmd.addSibling());add('Edit text','F2',cmd.edit);
   add('Delete node','Del',cmd.del,root);add('Duplicate node','Ctrl+D',cmd.dup,root);
   add('Move up','Alt+↑',cmd.up,root);add('Move down','Alt+↓',cmd.down,root);add('Indent','Alt+→',cmd.indent,root);add('Outdent','Alt+←',cmd.outdent,root);
-  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Toggle task','T',cmd.task);add('Reset position of selected node','',()=>cmd.resetPos());add('Reset all node positions','',()=>cmd.resetPos(true));add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
+  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Edit JSON','',openJSON);add('Toggle task','T',cmd.task);add('Reset position of selected node','',()=>cmd.resetPos());add('Reset all node positions','',()=>cmd.resetPos(true));add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
   [1,2,3,4].forEach(n=>add('Show '+n+(n===1?' level':' levels'),'',()=>cmd.setLevel(n)));add('Show all levels','',()=>cmd.setLevel(null));
   add(S.focus?'Exit focus':'Focus on this branch','',cmd.focus);add('Fit map to screen','0',cmd.fit);add('Zoom in','+',cmd.zoomIn);add('Zoom out','−',cmd.zoomOut);
   add('Undo','Ctrl+Z',undo);add('Redo','Ctrl+Y',redo);add('Search nodes','/',cmd.search);add('Next search match','',()=>jumpMatch(1));
@@ -1687,7 +1734,7 @@ $('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
 $('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;$('#btnTask').onclick=cmd.task;
 $('#btnVersions').onclick=openVersions;$('#btnExport').onclick=openExport;$('#btnMaps').onclick=openMaps;
 $('#btnMore').onclick=e=>popAt(e.currentTarget,[
-  {label:'New map',run:()=>createMap('blank')},{label:'Maps…',run:openMaps},{label:'Import…',run:openImport},{label:'Export…',run:openExport},'-',
+  {label:'New map',run:()=>createMap('blank')},{label:'Maps…',run:openMaps},{label:'Import…',run:openImport},{label:'Export…',run:openExport},{label:'Edit JSON…',run:openJSON},'-',
   {label:'Version history',run:openVersions},{label:'Name this version',key:'Ctrl+S',run:saveNamedVersion},{label:'Download backup',run:()=>downloadBackup().catch(err=>toast(err.message))},'-',
   {label:'Show or hide outline',run:()=>togglePanel('outline')},{label:'Show or hide details',run:()=>togglePanel('insp')},{label:'Command palette',key:'Ctrl+K',run:openPalette},'-',
   {label:'Settings and sync',run:openSettings},{label:'Keyboard shortcuts',key:'?',run:openHelp}]);
