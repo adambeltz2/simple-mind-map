@@ -194,7 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.3.0';
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -711,28 +711,52 @@ function toggleCollapse(id){cmd.toggle(id)}
 const svgEl=$('#svg'),ptrs=new Map();
 let drag=null,pinch=null,lastTap={id:null,t:0},lpTimer=null,ghost=null,dropId=null;
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-function setDrop(id){
-  if(dropId===id)return;
-  if(dropId){const o=$(`#vp [data-id="${dropId}"]`);o&&o.classList.remove('drop')}
-  dropId=id;
-  if(id){const o=$(`#vp [data-id="${id}"]`);o&&o.classList.add('drop')}
+let dropMode='in',dropLine=null;
+function setDrop(id,mode='in'){
+  if(dropId!==id){
+    if(dropId){const o=$(`#vp [data-id="${dropId}"]`);o&&o.classList.remove('drop')}
+    dropId=id;
+    if(id&&mode==='in'){const o=$(`#vp [data-id="${id}"]`);o&&o.classList.add('drop')}
+  }
+  dropMode=mode;
+  if(id&&mode!=='in'){
+    const o=$(`#vp [data-id="${id}"] .main`)||$(`#vp [data-id="${id}"]`),r=o.getBoundingClientRect();
+    if(!dropLine){dropLine=document.createElement('div');dropLine.style.cssText='position:fixed;z-index:49;height:4px;border-radius:2px;background:var(--acc);pointer-events:none';document.body.appendChild(dropLine)}
+    dropLine.style.left=(r.left-4)+'px';dropLine.style.width=(r.width+8)+'px';dropLine.style.top=((mode==='before'?r.top:r.bottom)-2)+'px';
+  }else if(dropLine){dropLine.remove();dropLine=null}
+  if(id&&mode==='in'){const o=$(`#vp [data-id="${id}"]`);o&&o.classList.add('drop')}
+  else if(id){const o=$(`#vp [data-id="${id}"]`);o&&o.classList.remove('drop')}
 }
 function startGhost(id){
   ghost=document.createElement('div');
-  ghost.style.cssText='position:fixed;z-index:50;pointer-events:none;padding:6px 12px;border-radius:8px;background:var(--surf);border:2px solid var(--acc);box-shadow:var(--shadow);font-size:13px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  ghost.textContent=N(id).n.t||'(empty)';document.body.appendChild(ghost);
+  ghost.style.cssText='position:fixed;z-index:50;pointer-events:none;padding:6px 12px;border-radius:8px;background:var(--surf);border:2px solid var(--acc);box-shadow:var(--shadow);font-size:13px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  ghost.textContent=N(id).n.t||'(empty)';ghost.dataset.t=ghost.textContent;document.body.appendChild(ghost);
 }
 function moveGhost(e){
   if(!ghost)return;
   ghost.style.left=(e.clientX+14)+'px';ghost.style.top=(e.clientY+14)+'px';
   const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest&&el.closest('#vp [data-id]');
   const id=g&&g.dataset.id;
-  setDrop(id&&id!==drag.id&&!isAnc(drag.id,id)?id:null);
+  if(id&&id!==drag.id&&!isAnc(drag.id,id)){
+    const t=N(id),m=g.querySelector('.main')||g,r=m.getBoundingClientRect(),f=(e.clientY-r.top)/Math.max(1,r.height);
+    let mode='in';if(t.p){if(f<0.28)mode='before';else if(f>0.72)mode='after'}
+    setDrop(id,mode);
+    const nm=(t.n.t||'(empty)').slice(0,24);
+    ghost.textContent=(mode==='in'?'↳ Child of ':mode==='before'?'↑ Before ':'↓ After ')+nm;
+  }else{setDrop(null);ghost.textContent=ghost.dataset.t+'  (drop on a node)'}
 }
 function endGhost(doDrop,srcId){
-  const target=dropId;setDrop(null);
+  const target=dropId,mode=dropMode;setDrop(null);
   if(ghost){ghost.remove();ghost=null}
-  if(doDrop&&target&&srcId&&commit(()=>{opMove(srcId,target)})){S.sel=srcId;select(srcId);toast('Moved under “'+(N(target).n.t||'(empty)').slice(0,30)+'”','Undo',undo)}
+  if(!(doDrop&&target&&srcId))return;
+  const ok=commit(()=>{
+    if(mode==='in')return opMove(srcId,target);
+    const t=N(target);if(!t.p||isAnc(srcId,t.p.id))return false;
+    const pid=t.p.id;let at=t.i+(mode==='after'?1:0);
+    const s=N(srcId);if(s.p&&s.p.id===pid&&s.i<at)at--;
+    return opMove(srcId,pid,at);
+  });
+  if(ok){S.sel=srcId;select(srcId);toast(mode==='in'?'Moved under “'+(N(target).n.t||'(empty)').slice(0,30)+'”':'Moved','Undo',undo)}
 }
 svgEl.addEventListener('pointerdown',e=>{
   if(e.button===2)return;
@@ -1491,7 +1515,7 @@ const TEMPLATES={
 };
 function welcomeMap(){
   const m=mkMap('Welcome to Simple Mind Map',T('Simple Mind Map',[
-    T('Get started',[T('Click a node to select it'),T('Tab adds a child'),T('Enter adds a sibling'),T('Double-click or F2 edits the text'),T('Drag a node onto another to move it')]),
+    T('Get started',[T('Click a node to select it'),T('Tab adds a child'),T('Enter adds a sibling'),T('Double-click or F2 edits the text'),T('Drag a node onto another: middle = child, edge = reorder')]),
     T('Move around',[T('Drag the background to pan'),T('Mouse wheel or pinch to zoom'),T('Arrow keys change the selection'),T('Levels 1 to 4 limit how deep the map shows'),T('Use the outline on the left to jump')]),
     T('Your data',[T('Saved in this browser as you type'),T('Versions keeps history you can restore'),T('Backup downloads a zip of everything'),T('Dropbox sync is in Settings')]),
     T('Details',[T('Notes, tags and due dates live in the details panel',[],{tg:['tip']}),T('Mark a node as a task to track progress',[],{k:false}),T('Search with / or Ctrl+F')]),
