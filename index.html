@@ -194,7 +194,8 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.6.0';
+const DEFAULT_DBX_KEY='pigx740dqsduog8'; // public PKCE app key (no secret)
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -1450,7 +1451,7 @@ const DBX={
   tok:()=>DB.meta('dbxTok'),
   async connected(){const t=await DBX.tok();return !!(t&&t.refresh)},
   async begin(){
-    const key=(S.set.dbxKey||'').trim();if(!key)throw new Error('Enter your Dropbox app key first');
+    const key=(S.set.dbxKey||DEFAULT_DBX_KEY).trim();if(!key)throw new Error('Enter your Dropbox app key first');
     const ver=b64url(crypto.getRandomValues(new Uint8Array(48))),st=b64url(crypto.getRandomValues(new Uint8Array(12)));
     const ch=b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ver))));
     sessionStorage.setItem('smm.pkce',JSON.stringify({ver,st,key}));
@@ -1659,7 +1660,7 @@ async function openSettings(){
    <div class="srow"><label for="sTheme">Theme</label><select id="sTheme" class="in" style="width:auto"><option value="auto">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
    <div class="grp" style="display:block">Dropbox sync</div>
    <div class="small mut">Each map is kept as a file in your Dropbox app folder. Create a Dropbox app (scoped access, app folder) with the <b>files.content.read</b> and <b>files.content.write</b> permissions, add the redirect address below, and paste its app key here.</div>
-   <label class="field" for="sKey">Dropbox app key</label><input class="in" id="sKey" autocomplete="off" spellcheck="false" value="${esc(S.set.dbxKey||'')}">
+   <label class="field" for="sKey">Dropbox app key</label><input class="in" id="sKey" autocomplete="off" spellcheck="false" value="${esc(S.set.dbxKey||DEFAULT_DBX_KEY)}">
    <div class="small mut" style="margin-top:6px">Redirect address to add in the Dropbox console:<br><code style="word-break:break-all">${esc(DBX.redirect())}</code></div>
    <div class="row" style="flex-wrap:wrap;margin-top:10px"><span class="pill">${conn?'Connected':'Not connected'}</span>
     ${conn?`<button class="btn" id="sSync">${ic('cloud',14)}Sync now</button><button class="btn dng" id="sDis">Disconnect</button>`:`<button class="btn pri" id="sCon">${ic('cloud',14)}Connect Dropbox</button>`}</div>
@@ -1677,7 +1678,7 @@ async function openSettings(){
      $('#sAuto',d).onchange=async e=>{S.set.autoSync=e.target.checked;await saveSettings()};
      $('#sWeekly',d).onchange=async e=>{S.set.autoBackup=e.target.checked;await saveSettings()};
      const on=(id,fn)=>{const el=$(id,d);if(el)el.onclick=fn};
-     on('#sCon',async()=>{try{S.set.dbxKey=$('#sKey',d).value.trim();await saveSettings();await saveMap(true);await DBX.begin()}catch(e){toast(e.message)}});
+     on('#sCon',async()=>{try{S.set.dbxKey=$('#sKey',d).value.trim()||DEFAULT_DBX_KEY;await saveSettings();await saveMap(true);await DBX.begin()}catch(e){toast(e.message)}});
      on('#sDis',async()=>{await DB.setMeta('dbxTok',null);setSync('off');d.close();toast('Dropbox disconnected. Your maps stay on this device.')});
      on('#sSync',async()=>{d.close();await syncAll({manual:true})});
      on('#sDl',async()=>{try{await downloadBackup();$('#sBk',d).textContent='Last backup: just now'}catch(e){toast('Backup failed: '+e.message)}});
