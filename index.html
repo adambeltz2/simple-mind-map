@@ -194,7 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.2.0';
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -1170,19 +1170,29 @@ function download(name,data,type='application/octet-stream'){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
 }
+function toCSV(map){
+  const q=v=>{v=v==null?'':String(v).replace(/\r?\n/g,' ');return /[",]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const rows=[['Level','Parent','Child','Parent Path','Is Task','Status','Due','Priority','Tags','Note','Parent ID','Child ID']];
+  const w=(p,path,lvl)=>{p.c.forEach(c=>{
+    rows.push([lvl,p.t||(p===map.root?map.title:''),c.t,path.join(' > '),c.k!==undefined?'Yes':'No',c.k===undefined?'':c.k?'Closed':'Open',c.d||'',c.p||'',(c.tg||[]).join('; '),c.n||'',p.id,c.id]);
+    w(c,path.concat(c.t||''),lvl+1)})};
+  const rt=map.root.t||map.title;w(map.root,[rt],1);
+  return '\ufeff'+rows.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n';
+}
 const exportable=()=>({...S.map,root:S.map.root});
 async function doExport(fmt){
   const m=exportable(),base=safeName(m.title);
   if(fmt==='json')download(base+'.smm.json',JSON.stringify({smm:1,id:m.id,title:m.title,created:m.created,updated:m.updated,root:m.root},null,1),'application/json');
   else if(fmt==='mm')download(base+'.mm',toMM(m),'application/xml');
   else if(fmt==='opml')download(base+'.opml',toOPML(m),'text/x-opml');
+  else if(fmt==='csv')download(base+'.csv',toCSV(m),'text/csv');
   else if(fmt==='md')download(base+'.md',toMD(m),'text/markdown');
   else if(fmt==='drawio')download(base+'.drawio',drawioXml(m),'application/vnd.jgraph.mxfile');
   else if(fmt==='svg')download(base+'.svg',toSVG(m,curTheme()),'image/svg+xml');
   else if(fmt==='png')download(base+'.png',await svgToPngBlob(toSVG(m,'light')));
 }
 function openExport(){
-  const items=[['json','Simple Mind Map file','.smm.json · everything, can be re-imported'],['mm','FreeMind','.mm · Freeplane, XMind, MindManager and others'],['opml','OPML','.opml · outliners and many mind-map tools'],['md','Markdown','.md · nested list with notes'],['drawio','draw.io','.drawio · editable diagram for diagrams.net'],['svg','SVG image','.svg · scalable picture'],['png','PNG image','.png · picture for slides and docs']];
+  const items=[['json','Simple Mind Map file','.smm.json · everything, can be re-imported'],['mm','FreeMind','.mm · Freeplane, XMind, MindManager and others'],['opml','OPML','.opml · outliners and many mind-map tools'],['md','Markdown','.md · nested list with notes'],['csv','CSV','.csv · one row per parent and child, with task Open/Closed'],['drawio','draw.io','.drawio · editable diagram for diagrams.net'],['svg','SVG image','.svg · scalable picture'],['png','PNG image','.png · picture for slides and docs']];
   modal('Export “'+(S.map.title||'map')+'”',`<div class="note">Exports include the whole map, including collapsed and hidden levels.</div><div class="list">${items.map(([k,t,s])=>`<div><div class="grow"><b>${t}</b><div class="small mut">${s}</div></div><button class="btn sm" data-fmt="${k}">${ic('download',14)}Download</button></div>`).join('')}</div>
     <div class="grp" style="display:block">Everything</div><div class="list"><div><div class="grow"><b>Backup of all maps</b><div class="small mut">.zip · every map plus its version history</div></div><button class="btn sm" data-fmt="backup">${ic('archive',14)}Download</button></div></div>`,
     [{label:'Close'}],{onOpen:d=>{d.querySelector('.db').onclick=async e=>{
@@ -1713,7 +1723,7 @@ async function init(){
   const since=Date.now()-(S.set.lastBackup||S.set.firstRun||Date.now());
   if(since>7*864e5&&!(S.set.autoBackup&&await DBX.connected()))setTimeout(()=>toast(`It has been ${Math.round(since/864e5)} days since your last backup.`,'Back up',()=>downloadBackup().catch(e=>toast(e.message)),12000),2500);
   if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
-  window.SMM={S,cmd,commit,render,toMD,toOPML,toMM,drawioXml,toSVG,parseIndented,parseOPML,parseMM,makeZip,readZip,computeLayout,diffTrees,takeSnapshot,DB,syncAll,DBX,openMap,importText,buildBackupZip,restoreZip,thinSnaps,select,startEdit,endEdit};
+  window.SMM={S,cmd,commit,render,toMD,toCSV,toOPML,toMM,drawioXml,toSVG,parseIndented,parseOPML,parseMM,makeZip,readZip,computeLayout,diffTrees,takeSnapshot,DB,syncAll,DBX,openMap,importText,buildBackupZip,restoreZip,thinSnaps,select,startEdit,endEdit};
 }
 init().catch(err=>{document.body.insertAdjacentHTML('afterbegin','<div style="padding:16px;position:fixed;z-index:99;background:#fff;color:#900">Could not start Simple Mind Map: '+esc(err.message||err)+'</div>');console.error(err)});
 
