@@ -194,7 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.6.0';
+const APP_VERSION='1.7.0';
 const DEFAULT_DBX_KEY='pigx740dqsduog8'; // public PKCE app key (no secret)
 'use strict';
 /* ============================================================
@@ -1008,6 +1008,7 @@ function diffSummary(d){
   return p.length?p.slice(0,3).join(', '):'Reordered or minor change';
 }
 let snapRetry=null;
+const histPending=new Set();let histFirst=true;
 async function takeSnapshot(o={}){
   const m=S.map;if(!m||!DB.db)return null;
   const data=JSON.stringify({t:m.title,r:m.root});
@@ -1020,22 +1021,27 @@ async function takeSnapshot(o={}){
   const diff=last?diffTrees(JSON.parse(last.data).r,m.root):null;
   const rec={mapId:m.id,ts:Date.now(),name:o.name||null,title:m.title,data,nodes:countNodes(m.root),summary:o.summary||(diff?diffSummary(diff):'First snapshot')};
   await DB.put('snaps',rec);await thinSnaps(m.id);
+  histPending.add(m.id);if(typeof scheduleSync==='function')scheduleSync();
   return rec;
 }
 const snapSoon=debounce(()=>{takeSnapshot().catch(()=>{})},20000);
 /* keep: everything from the last hour, hourly for a day, daily for 30 days, plus all named versions */
-async function thinSnaps(mapId){
-  const snaps=(await DB.snapsOf(mapId)).sort((a,b)=>b.ts-a.ts),now=Date.now(),seen=new Set(),del=[];
-  for(const s of snaps){
-    if(s.name)continue;
+function thinPlan(items,now){   // items: [{key,ts,named}] -> keys to delete
+  const list=[...items].sort((a,b)=>b.ts-a.ts),seen=new Set(),del=[];
+  for(const s of list){
+    if(s.named)continue;
     const age=now-s.ts;let key;
     if(age<=3600e3)continue;
     else if(age<=86400e3)key='h'+Math.floor(s.ts/3600e3);
     else if(age<=30*86400e3)key='d'+dayKey(s.ts);
-    else{del.push(s.id);continue}
-    if(seen.has(key))del.push(s.id);else seen.add(key);
+    else{del.push(s.key);continue}
+    if(seen.has(key))del.push(s.key);else seen.add(key);
   }
-  for(const id of del)await DB.del('snaps',id);
+  return del;
+}
+async function thinSnaps(mapId){
+  const snaps=await DB.snapsOf(mapId);
+  for(const id of thinPlan(snaps.map(s=>({key:s.id,ts:s.ts,named:!!s.name})),Date.now()))await DB.del('snaps',id);
 }
 const nameVersion=()=>saveNamedVersion();
 async function saveNamedVersion(){
@@ -1511,6 +1517,32 @@ async function applyRemote(m,remote,rev){
   else await DB.put('maps',m);
   upsertList(m);
 }
+/* Version history sync: /history/<mapId>/<ts>.json (named versions: <ts>.n.json). Merged across devices, thinned with the same rules. */
+async function syncHistory(mapId){
+  const dir='/history/'+mapId,rem=new Map();
+  for(const e of await DBX.list(dir)){const m=/^(\d+)(\.n)?\.json$/.exec(e.name);if(m&&e['.tag']==='file')rem.set(+m[1],{named:!!m[2]})}
+  const loc=await DB.snapsOf(mapId),have=new Set(loc.map(x=>x.ts)),union=new Map();
+  rem.forEach((v,ts)=>union.set(ts,{key:ts,ts,named:v.named}));
+  loc.forEach(x=>union.set(x.ts,{key:x.ts,ts:x.ts,named:!!x.name}));
+  const drop=new Set(thinPlan([...union.values()],Date.now()));
+  let n=0;const CAP=40,fn=(ts,named)=>`${dir}/${ts}${named?'.n':''}.json`;
+  for(const [ts,v] of rem)if(drop.has(ts))await DBX.remove(fn(ts,v.named)).catch(()=>{});
+  for(const x of loc){
+    if(drop.has(x.ts)){await DB.del('snaps',x.id);continue}
+    if(!rem.has(x.ts)&&n<CAP){
+      const body=new TextEncoder().encode(JSON.stringify({ts:x.ts,name:x.name,title:x.title,data:x.data,nodes:x.nodes,summary:x.summary}));
+      try{await DBX.upload(fn(x.ts,!!x.name),body,{'.tag':'add'})}catch(e){if(e.status!==409)throw e}
+      n++;
+    }
+  }
+  for(const [ts,v] of rem){
+    if(drop.has(ts)||have.has(ts)||n>=CAP)continue;
+    const dl=await DBX.download(fn(ts,v.named));let r;try{r=JSON.parse(dl.text)}catch{continue}
+    if(!r||typeof r.data!=='string')continue;
+    await DB.put('snaps',{mapId,ts,name:r.name||null,title:r.title,data:r.data,nodes:r.nodes,summary:r.summary});n++;
+  }
+  return n;
+}
 async function syncAll(o={}){
   if(syncing||!(await DBX.connected()))return;
   if(!o.manual&&!S.set.autoSync)return;
@@ -1540,6 +1572,12 @@ async function syncAll(o={}){
       if(!remote||!remote.root)continue;
       const m={smm:1,id,title:remote.title||'Map',created:remote.created||Date.now(),updated:remote.updated||Date.now(),root:remote.root,view:null};
       m.dbx={rev:dl.meta.rev||r.rev,lv:m.lv||0};await DB.put('maps',m);upsertList(m);down++;
+    }
+    {
+      const ids=new Set(histPending);
+      if(o.manual||histFirst)(await DB.all('maps')).forEach(m=>ids.add(m.id));
+      for(const id of ids){try{await syncHistory(id);histPending.delete(id)}catch(e){if(e.auth)throw e}}
+      histFirst=false;
     }
     setSync('ok');
     if(conf)toast(conf+' map'+(conf>1?'s':'')+' changed on two devices. Your version was kept and the Dropbox version was saved as a copy.');
