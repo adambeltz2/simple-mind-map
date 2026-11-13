@@ -161,6 +161,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
     <button class="ib bd" id="btnRedo" aria-label="Redo" data-ic="redo"></button>
     <button class="btn" id="btnExpand">Expand all</button>
     <button class="btn" id="btnCollapse">Collapse all</button>
+    <button class="btn" id="btnTask"><span data-ic="check" data-s="16"></span><span id="btnTaskL">Task</span></button>
     <button class="btn" id="btnFocus"><span data-ic="target" data-s="16"></span>Focus branch</button>
     <button class="ib bd" id="btnTogO" aria-label="Show or hide outline" data-ic="list"></button>
     <button class="ib bd" id="btnTogI" aria-label="Show or hide details" data-ic="sliders"></button>
@@ -580,6 +581,7 @@ function renderBar(){
   const tags=allTags();if(S.tag&&!tags.includes(S.tag))S.tag='';
   $('#tagSel').innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option${t===S.tag?' selected':''}>${esc(t)}</option>`).join('');
   $('#btnUndo').disabled=!S.undo.length;$('#btnRedo').disabled=!S.redo.length;
+  {const sn=selNode();$('#btnTaskL').textContent=sn&&sn.n.k!==undefined?'Remove task':'Make task'}
   $('#btnFocus').innerHTML=ic('target',16)+(S.focus?'Exit focus':'Focus branch');
   const path=pathTo(S.focus||S.sel||S.map.root.id).map(n=>n.t||'(empty)');
   const cr=$('#crumb');
@@ -675,6 +677,8 @@ const cmd={
   fit(){fitView(true)},
   zoomIn(){zoomAt(1.2)},zoomOut(){zoomAt(1/1.2)},zoomReset(){const r=stageRect();zoomAt(1/S.view.k,r.width/2,r.height/2)},
   undo,redo,
+  task(){const x=selNode();if(!x)return;const id=x.n.id,on=x.n.k===undefined;commit(()=>{const n=N(id).n;if(on)n.k=false;else delete n.k});toast(on?'Marked as task':'Task removed')},
+  done(){const x=selNode();if(!x)return;const id=x.n.id;commit(()=>{const n=N(id).n;n.k=n.k!==true})},
   copy(cut){
     const x=selNode();if(!x)return;
     const text=toIndented(x.n);S.clip={tree:JSON.parse(JSON.stringify(x.n)),text};
@@ -843,6 +847,8 @@ document.addEventListener('keydown',e=>{
     case 'F2':e.preventDefault();cmd.edit();break;
     case 'Delete':case 'Backspace':e.preventDefault();cmd.del();break;
     case ' ':e.preventDefault();cmd.toggle();break;
+    case 't':case 'T':e.preventDefault();cmd.task();break;
+    case 'x':case 'X':e.preventDefault();cmd.done();break;
     case 'ArrowUp':case 'ArrowDown':case 'ArrowLeft':case 'ArrowRight':e.preventDefault();navigate(k);break;
     case 'Home':select(viewRoot().id,{center:true});break;
     case '/':e.preventDefault();cmd.search();break;
@@ -876,7 +882,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#pop').style.dis
 function openNodeMenu(x,y){
   const n=selNode();if(!n)return;const root=!n.p;
   popMenu([
-    {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},'-',
+    {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},{label:n.n.k===undefined?'Make task':'Remove task',key:'T',run:cmd.task},{label:n.n.k===true?'Mark not done':'Mark done',key:'X',run:cmd.done},'-',
     {label:'Copy',key:'Ctrl+C',run:()=>cmd.copy()},{label:'Cut',key:'Ctrl+X',run:cmd.cut,disabled:root},{label:'Paste as children',key:'Ctrl+V',run:async()=>{let t=null;try{t=await navigator.clipboard.readText()}catch{}cmd.paste(t)}},{label:'Duplicate',key:'Ctrl+D',run:cmd.dup,disabled:root},'-',
     {label:n.n.c.length?'Collapse or expand':'No children',key:'Space',run:()=>cmd.toggle(),disabled:!n.n.c.length},{label:S.focus?'Exit focus':'Focus on this branch',run:cmd.focus},'-',
     {label:'Delete',key:'Del',run:cmd.del,danger:true,disabled:root}
@@ -1586,7 +1592,7 @@ async function openSettings(){
    }});
 }
 function openHelp(){
-  const rows=[['Tab','Add a child'],['Enter','Add a sibling (Shift+Enter: before)'],['F2 or double-click','Edit text'],['Enter / Esc (while editing)','Finish / cancel'],['Delete','Delete the branch'],['Space','Collapse or expand'],['Arrow keys','Move the selection'],['Alt + ↑ ↓','Reorder among siblings'],['Alt + → ←','Indent / outdent'],['Ctrl+C, X, V','Copy, cut, paste branches or text lists'],['Ctrl+D','Duplicate'],['Ctrl+Z, Ctrl+Y','Undo, redo'],['Ctrl+S','Save a named version'],['/ or Ctrl+F','Search (Enter for next match)'],['Ctrl+K','Command palette'],['+ − 0','Zoom in, out, fit'],['Drag a node onto another','Move it there'],['Drag background / wheel / pinch','Pan and zoom']];
+  const rows=[['Tab','Add a child'],['Enter','Add a sibling (Shift+Enter: before)'],['F2 or double-click','Edit text'],['Enter / Esc (while editing)','Finish / cancel'],['T','Make or remove task'],['X','Mark done / not done'],['Delete','Delete the branch'],['Space','Collapse or expand'],['Arrow keys','Move the selection'],['Alt + ↑ ↓','Reorder among siblings'],['Alt + → ←','Indent / outdent'],['Ctrl+C, X, V','Copy, cut, paste branches or text lists'],['Ctrl+D','Duplicate'],['Ctrl+Z, Ctrl+Y','Undo, redo'],['Ctrl+S','Save a named version'],['/ or Ctrl+F','Search (Enter for next match)'],['Ctrl+K','Command palette'],['+ − 0','Zoom in, out, fit'],['Drag a node onto another','Move it there'],['Drag background / wheel / pinch','Pan and zoom']];
   modal('Keyboard and mouse',`<div class="list">${rows.map(([k,v])=>`<div><kbd style="min-width:120px">${esc(k)}</kbd><span class="grow">${esc(v)}</span></div>`).join('')}</div>`);
 }
 function commandList(){
@@ -1595,7 +1601,7 @@ function commandList(){
   add('Add child','Tab',cmd.addChild);add('Add sibling','Enter',()=>cmd.addSibling());add('Edit text','F2',cmd.edit);
   add('Delete node','Del',cmd.del,root);add('Duplicate node','Ctrl+D',cmd.dup,root);
   add('Move up','Alt+↑',cmd.up,root);add('Move down','Alt+↓',cmd.down,root);add('Indent','Alt+→',cmd.indent,root);add('Outdent','Alt+←',cmd.outdent,root);
-  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Collapse all','',cmd.collapseAll);
+  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Toggle task','T',cmd.task);add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
   [1,2,3,4].forEach(n=>add('Show '+n+(n===1?' level':' levels'),'',()=>cmd.setLevel(n)));add('Show all levels','',()=>cmd.setLevel(null));
   add(S.focus?'Exit focus':'Focus on this branch','',cmd.focus);add('Fit map to screen','0',cmd.fit);add('Zoom in','+',cmd.zoomIn);add('Zoom out','−',cmd.zoomOut);
   add('Undo','Ctrl+Z',undo);add('Redo','Ctrl+Y',redo);add('Search nodes','/',cmd.search);add('Next search match','',()=>jumpMatch(1));
@@ -1630,7 +1636,7 @@ $('#lvl').addEventListener('click',e=>{const b=e.target.closest('button');if(b)c
 $('#lay').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.layout=b.dataset.v;saveUi();saveSoon();render();fitView(true)});
 $('#tagSel').addEventListener('change',e=>{S.tag=e.target.value;renderMap();renderOutline()});
 $('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
-$('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;
+$('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;$('#btnTask').onclick=cmd.task;
 $('#btnVersions').onclick=openVersions;$('#btnExport').onclick=openExport;$('#btnMaps').onclick=openMaps;
 $('#btnMore').onclick=e=>popAt(e.currentTarget,[
   {label:'New map',run:()=>createMap('blank')},{label:'Maps…',run:openMaps},{label:'Import…',run:openImport},{label:'Export…',run:openExport},'-',
