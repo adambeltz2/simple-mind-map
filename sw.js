@@ -1,6 +1,6 @@
 /* Simple Mind Map service worker: offline shell, stale-while-revalidate.
    Bump VERSION when you change files so installed copies refresh. */
-const VERSION = 'smm-v1.3.0';
+const VERSION = 'smm-v1.4.0';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

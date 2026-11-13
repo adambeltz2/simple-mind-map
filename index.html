@@ -194,7 +194,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.4.0';
 'use strict';
 /* ============================================================
    Simple Mind Map: single-file, offline-first, no build step.
@@ -388,6 +388,12 @@ function computeLayout(root,o){
     for(const k of g){place(k,dir>0?r.x+r.w+HGR:r.x-HGR,top+k.sub/2,dir);edges.push({a:r,b:k});top+=k.sub+VG}
   };
   group(right,1);group(left,-1);
+  const shift=(it,dx,dy,par)=>{
+    dx+=it.n.ox||0;dy+=it.n.oy||0;it.x+=dx;it.y+=dy;
+    if(par)it.dir=(it.x+it.w/2)>=(par.x+par.w/2)?1:-1;
+    it.kids.forEach(k=>shift(k,dx,dy,it));
+  };
+  r.kids.forEach(k=>shift(k,0,0,r));
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   for(const it of items){x0=Math.min(x0,it.x);y0=Math.min(y0,it.y);x1=Math.max(x1,it.x+it.w);y1=Math.max(y1,it.y+it.h)}
   const M=36;x0-=M;y0-=M;x1+=M;y1+=M;
@@ -680,6 +686,7 @@ const cmd={
   fit(){fitView(true)},
   zoomIn(){zoomAt(1.2)},zoomOut(){zoomAt(1/1.2)},zoomReset(){const r=stageRect();zoomAt(1/S.view.k,r.width/2,r.height/2)},
   undo,redo,
+  resetPos(all){const x=selNode();if(!x)return;commit(()=>{const w=n=>{delete n.ox;delete n.oy;n.c.forEach(w)};if(all===true)w(S.map.root);else{delete x.n.ox;delete x.n.oy}});toast(all===true?'All positions reset':'Position reset')},
   task(){const x=selNode();if(!x)return;const id=x.n.id,on=x.n.k===undefined;commit(()=>{const n=N(id).n;if(on)n.k=false;else delete n.k});toast(on?'Marked as task':'Task removed')},
   done(){const x=selNode();if(!x)return;const id=x.n.id;commit(()=>{const n=N(id).n;n.k=n.k!==true})},
   copy(cut){
@@ -743,11 +750,15 @@ function moveGhost(e){
     setDrop(id,mode);
     const nm=(t.n.t||'(empty)').slice(0,24);
     ghost.textContent=(mode==='in'?'↳ Child of ':mode==='before'?'↑ Before ':'↓ After ')+nm;
-  }else{setDrop(null);ghost.textContent=ghost.dataset.t+'  (drop on a node)'}
+  }else{setDrop(null);ghost.textContent=ghost.dataset.t+'  (release to place here)'}
 }
-function endGhost(doDrop,srcId){
+function endGhost(doDrop,srcId,dx,dy){
   const target=dropId,mode=dropMode;setDrop(null);
   if(ghost){ghost.remove();ghost=null}
+  if(doDrop&&!target&&srcId&&dx!=null){
+    if(commit(()=>{const n=N(srcId).n;n.ox=Math.round((n.ox||0)+dx);n.oy=Math.round((n.oy||0)+dy);if(!n.ox)delete n.ox;if(!n.oy)delete n.oy})){S.sel=srcId;select(srcId);toast('Placed. Drop on a node to re-parent.','Undo',undo)}
+    return;
+  }
   if(!(doDrop&&target&&srcId))return;
   const ok=commit(()=>{
     if(mode==='in')return opMove(srcId,target);
@@ -792,7 +803,7 @@ function endPtr(e,cancel){
   if(!drag)return;
   clearTimeout(lpTimer);const d=drag;drag=null;svgEl.classList.remove('pan');
   if(d.consumed){return}
-  if(d.moved){if(d.mode==='node')endGhost(!cancel,d.id);return}
+  if(d.moved){if(d.mode==='node')endGhost(!cancel,d.id,(e.clientX-d.sx)/S.view.k,(e.clientY-d.sy)/S.view.k);return}
   if(cancel)return;
   if(d.tog){toggleCollapse(d.tog);return}
   if(d.chk){commit(()=>{const n=N(d.chk).n;n.k=!n.k});return}
@@ -909,7 +920,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#pop').style.dis
 function openNodeMenu(x,y){
   const n=selNode();if(!n)return;const root=!n.p;
   popMenu([
-    {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},{label:n.n.k===undefined?'Make task':'Remove task',key:'T',run:cmd.task},{label:n.n.k===true?'Mark not done':'Mark done',key:'X',run:cmd.done},'-',
+    {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},{label:'Reset position',run:()=>cmd.resetPos(),disabled:!(n.n.ox||n.n.oy)},{label:n.n.k===undefined?'Make task':'Remove task',key:'T',run:cmd.task},{label:n.n.k===true?'Mark not done':'Mark done',key:'X',run:cmd.done},'-',
     {label:'Copy',key:'Ctrl+C',run:()=>cmd.copy()},{label:'Cut',key:'Ctrl+X',run:cmd.cut,disabled:root},{label:'Paste as children',key:'Ctrl+V',run:async()=>{let t=null;try{t=await navigator.clipboard.readText()}catch{}cmd.paste(t)}},{label:'Duplicate',key:'Ctrl+D',run:cmd.dup,disabled:root},'-',
     {label:n.n.c.length?'Collapse or expand':'No children',key:'Space',run:()=>cmd.toggle(),disabled:!n.n.c.length},{label:S.focus?'Exit focus':'Focus on this branch',run:cmd.focus},'-',
     {label:'Delete',key:'Del',run:cmd.del,danger:true,disabled:root}
@@ -1515,7 +1526,7 @@ const TEMPLATES={
 };
 function welcomeMap(){
   const m=mkMap('Welcome to Simple Mind Map',T('Simple Mind Map',[
-    T('Get started',[T('Click a node to select it'),T('Tab adds a child'),T('Enter adds a sibling'),T('Double-click or F2 edits the text'),T('Drag a node onto another: middle = child, edge = reorder')]),
+    T('Get started',[T('Click a node to select it'),T('Tab adds a child'),T('Enter adds a sibling'),T('Double-click or F2 edits the text'),T('Drag a node to place it anywhere, or onto another node to re-parent')]),
     T('Move around',[T('Drag the background to pan'),T('Mouse wheel or pinch to zoom'),T('Arrow keys change the selection'),T('Levels 1 to 4 limit how deep the map shows'),T('Use the outline on the left to jump')]),
     T('Your data',[T('Saved in this browser as you type'),T('Versions keeps history you can restore'),T('Backup downloads a zip of everything'),T('Dropbox sync is in Settings')]),
     T('Details',[T('Notes, tags and due dates live in the details panel',[],{tg:['tip']}),T('Mark a node as a task to track progress',[],{k:false}),T('Search with / or Ctrl+F')]),
@@ -1638,7 +1649,7 @@ function commandList(){
   add('Add child','Tab',cmd.addChild);add('Add sibling','Enter',()=>cmd.addSibling());add('Edit text','F2',cmd.edit);
   add('Delete node','Del',cmd.del,root);add('Duplicate node','Ctrl+D',cmd.dup,root);
   add('Move up','Alt+↑',cmd.up,root);add('Move down','Alt+↓',cmd.down,root);add('Indent','Alt+→',cmd.indent,root);add('Outdent','Alt+←',cmd.outdent,root);
-  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Toggle task','T',cmd.task);add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
+  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Toggle task','T',cmd.task);add('Reset position of selected node','',()=>cmd.resetPos());add('Reset all node positions','',()=>cmd.resetPos(true));add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
   [1,2,3,4].forEach(n=>add('Show '+n+(n===1?' level':' levels'),'',()=>cmd.setLevel(n)));add('Show all levels','',()=>cmd.setLevel(null));
   add(S.focus?'Exit focus':'Focus on this branch','',cmd.focus);add('Fit map to screen','0',cmd.fit);add('Zoom in','+',cmd.zoomIn);add('Zoom out','−',cmd.zoomOut);
   add('Undo','Ctrl+Z',undo);add('Redo','Ctrl+Y',redo);add('Search nodes','/',cmd.search);add('Next search match','',()=>jumpMatch(1));
