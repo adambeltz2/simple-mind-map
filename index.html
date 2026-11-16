@@ -198,7 +198,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.7.1';
+const APP_VERSION='1.8.0';
 const DEFAULT_DBX_KEY='pigx740dqsduog8'; // public PKCE app key (no secret)
 'use strict';
 /* ============================================================
@@ -586,7 +586,8 @@ function renderSync(){
   else if(s.state==='ok'){txt='Saved · Dropbox synced '+ago(s.last);cls=''}
   else if(s.state==='err'){txt='Dropbox sync problem'+(s.msg?': '+s.msg:'');cls='err'}
   else if(s.state==='warn'){txt=s.msg||'Needs attention';cls='warn'}
-  c.className=cls;c.title=txt;c.lastElementChild.textContent=txt;
+  else if(s.state==='off'){txt='Saved on this device · tap to connect Dropbox'}
+  c.className=cls;c.title=txt+(s.state==='err'||s.state==='warn'||s.state==='off'?'. Click for Dropbox settings.':'');c.style.cursor='pointer';c.lastElementChild.textContent=txt;
 }
 function ago(t){const s=Math.round((Date.now()-t)/1000);if(s<45)return 'just now';const m=Math.round(s/60);if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+' h ago';return Math.round(h/24)+' d ago'}
 function renderBar(){
@@ -1476,26 +1477,32 @@ const DBX={
     await DB.setMeta('dbxTok',{access:j.access_token,refresh:j.refresh_token,exp:Date.now()+j.expires_in*1000-60000,key:p.key});
     S.set.dbxKey=p.key;await saveSettings();
   },
-  async access(){
+  async state(){const t=await DBX.tok();return !t||!t.refresh?'none':t.bad?'expired':'ok'},
+  async access(force){
     const t=await DBX.tok();if(!t)throw new Error('Not connected to Dropbox');
-    if(Date.now()<t.exp)return t.access;
+    if(t.bad){const e=new Error('Dropbox sign-in expired');e.auth=true;throw e}
+    if(!force&&Date.now()<t.exp)return t.access;
     const r=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',refresh_token:t.refresh,client_id:t.key})});
     const j=await r.json();
-    if(!r.ok){if(j.error==='invalid_grant')await DB.setMeta('dbxTok',null);const e=new Error(j.error_description||'Dropbox sign-in expired');e.auth=true;throw e}
+    if(!r.ok){const e=new Error(j.error_description||'Dropbox sign-in expired');if(j.error==='invalid_grant'||r.status===400||r.status===401){t.bad=true;await DB.setMeta('dbxTok',t);e.auth=true}throw e}
     t.access=j.access_token;t.exp=Date.now()+j.expires_in*1000-60000;await DB.setMeta('dbxTok',t);return t.access;
   },
   async err(r){let t='';try{t=await r.text()}catch{}const e=new Error((t||('HTTP '+r.status)).slice(0,200));e.status=r.status;e.body=t;if(r.status===401)e.auth=true;return e},
-  async rpc(ep,body){
-    const a=await DBX.access(),r=await fetch('https://api.dropboxapi.com/2/'+ep,{method:'POST',headers:{Authorization:'Bearer '+a,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  async retry(fn){try{return await fn(await DBX.access())}catch(e){if(e.status===401)return await fn(await DBX.access(true));throw e}},
+  rpc(ep,body){return DBX.retry(a=>DBX.rpc1(a,ep,body))},
+  async rpc1(a,ep,body){
+    const r=await fetch('https://api.dropboxapi.com/2/'+ep,{method:'POST',headers:{Authorization:'Bearer '+a,'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw await DBX.err(r);return r.json();
   },
   arg:o=>JSON.stringify(o).replace(/[\u007f-￿]/g,c=>'\\u'+('0000'+c.charCodeAt(0).toString(16)).slice(-4)),
-  async upload(path,bytes,mode){
-    const a=await DBX.access(),r=await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path,mode,autorename:false,mute:true}),'Content-Type':'application/octet-stream'},body:bytes});
+  upload(path,bytes,mode){return DBX.retry(a=>DBX.upload1(a,path,bytes,mode))},
+  async upload1(a,path,bytes,mode){
+    const r=await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path,mode,autorename:false,mute:true}),'Content-Type':'application/octet-stream'},body:bytes});
     if(!r.ok)throw await DBX.err(r);return r.json();
   },
-  async download(path){
-    const a=await DBX.access(),r=await fetch('https://content.dropboxapi.com/2/files/download',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path})}});
+  download(path){return DBX.retry(a=>DBX.download1(a,path))},
+  async download1(a,path){
+    const r=await fetch('https://content.dropboxapi.com/2/files/download',{method:'POST',headers:{Authorization:'Bearer '+a,'Dropbox-API-Arg':DBX.arg({path})}});
     if(!r.ok)throw await DBX.err(r);
     return {text:await r.text(),meta:JSON.parse(r.headers.get('dropbox-api-result')||'{}')};
   },
@@ -1548,7 +1555,7 @@ async function syncHistory(mapId){
   return n;
 }
 async function syncAll(o={}){
-  if(syncing||!(await DBX.connected()))return;
+  if(syncing)return;const dst0=await DBX.state();if(dst0==='none')return;if(dst0==='expired'){setSync('warn','Dropbox sign-in expired. Click to reconnect.');if(o.manual)toast('Dropbox sign-in expired. Open Settings to reconnect.','Reconnect',openSettings);return}
   if(!o.manual&&!S.set.autoSync)return;
   syncing=true;setSync('busy');
   let up=0,down=0,conf=0;
@@ -1587,7 +1594,7 @@ async function syncAll(o={}){
     if(conf)toast(conf+' map'+(conf>1?'s':'')+' changed on two devices. Your version was kept and the Dropbox version was saved as a copy.');
     else if(o.manual)toast(`Dropbox synced (${up} uploaded, ${down} downloaded)`);
   }catch(err){
-    if(err.auth)setSync('warn','Dropbox sign-in expired. Reconnect in Settings.');
+    if(err.auth)setSync('warn','Dropbox sign-in expired. Click to reconnect.'),o.manual||toast('Dropbox sign-in expired. Open Settings to reconnect.','Reconnect',openSettings);
     else if(err.status===409)setSync('err','conflict, will retry'),scheduleSync();
     else setSync('err',(err.message||'').slice(0,60));
     if(o.manual)toast('Dropbox sync failed: '+(err.message||'').slice(0,120));
@@ -1694,6 +1701,7 @@ function togglePanel(which){
 }
 function closePanel(which){if(isPhone())$(which==='outline'?'#outline':'#insp').classList.remove('open');else togglePanel(which)}
 async function openSettings(){
+  const dst=await DBX.state();
   const conn=await DBX.connected(),lb=S.set.lastBackup;
   const est=navigator.storage&&navigator.storage.estimate?await navigator.storage.estimate().catch(()=>null):null;
   const persisted=navigator.storage&&navigator.storage.persisted?await navigator.storage.persisted().catch(()=>false):false;
@@ -1704,8 +1712,8 @@ async function openSettings(){
    <div class="small mut">Each map is kept as a file in your Dropbox app folder. Create a Dropbox app (scoped access, app folder) with the <b>files.content.read</b> and <b>files.content.write</b> permissions, add the redirect address below, and paste its app key here.</div>
    <label class="field" for="sKey">Dropbox app key</label><input class="in" id="sKey" autocomplete="off" spellcheck="false" value="${esc(S.set.dbxKey||DEFAULT_DBX_KEY)}">
    <div class="small mut" style="margin-top:6px">Redirect address to add in the Dropbox console:<br><code style="word-break:break-all">${esc(DBX.redirect())}</code></div>
-   <div class="row" style="flex-wrap:wrap;margin-top:10px"><span class="pill">${conn?'Connected':'Not connected'}</span>
-    ${conn?`<button class="btn" id="sSync">${ic('cloud',14)}Sync now</button><button class="btn dng" id="sDis">Disconnect</button>`:`<button class="btn pri" id="sCon">${ic('cloud',14)}Connect Dropbox</button>`}</div>
+   <div class="row" style="flex-wrap:wrap;margin-top:10px"><span class="pill" style="${dst==='expired'?'background:#FFE9C2;color:#7A4B00':''}">${dst==='ok'?'Connected':dst==='expired'?'Sign-in expired':'Not connected'}</span>
+    ${dst==='ok'?`<button class="btn" id="sSync">${ic('cloud',14)}Sync now</button><button class="btn" id="sCon">Sign in again</button><button class="btn dng" id="sDis">Disconnect</button>`:dst==='expired'?`<button class="btn pri" id="sCon">${ic('cloud',14)}Reconnect Dropbox</button><button class="btn dng" id="sDis">Disconnect</button>`:`<button class="btn pri" id="sCon">${ic('cloud',14)}Connect Dropbox</button>`}</div>
    <div class="srow"><label for="sAuto">Sync automatically after changes</label><input type="checkbox" id="sAuto"${S.set.autoSync?' checked':''}></div>
    <div class="srow"><label for="sWeekly">Back up to Dropbox weekly</label><input type="checkbox" id="sWeekly"${S.set.autoBackup?' checked':''}></div>
    <div class="grp" style="display:block">Backup and storage</div>
@@ -1820,6 +1828,10 @@ window.addEventListener('resize',()=>{if(S.editing)placeEditor();drawMini()});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&S.map){saveMap(true);takeSnapshot({force:true}).catch(()=>{})}});
 window.addEventListener('pagehide',()=>{if(S.map)saveMap(true)});
 setInterval(renderSync,60000);
+$('#syncChip').addEventListener('click',()=>openSettings());
+const bgSync=()=>{if(document.visibilityState==='visible'&&S.set.autoSync)syncAll({manual:false}).catch(()=>{})};
+document.addEventListener('visibilitychange',bgSync);window.addEventListener('online',bgSync);
+setInterval(bgSync,5*60000);
 
 /* ---------------- start ---------------- */
 document.getElementById('ver').textContent='v'+APP_VERSION;
