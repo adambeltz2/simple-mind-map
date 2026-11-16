@@ -39,6 +39,8 @@ A mind-map tool that runs entirely in your browser. One HTML file, no build step
 | Drag to restructure | Drop on a node's middle to make a child, or on its top or bottom edge to reorder |
 | Free placement | Drop a node on empty space to leave it there, with its whole branch. Positions are saved. Reset from the right-click menu |
 | Tasks | `T` makes a node a task, `X` marks it done. Parents show a done count |
+| Assigned to | Give any node an owner in the Details panel. It shows as `@name` on the node and in the outline, and a toolbar filter shows one person's items or Unassigned |
+| Change parent | `M`, the right-click menu or the Details panel opens a searchable list of every valid new parent. Or drag the node onto one |
 | Notes, tags, colors | In the Details panel. Branch colors, due date and priority too |
 | Undo and redo | `Ctrl+Z` and `Ctrl+Shift+Z`, up to 200 steps |
 | Paste as nodes | Paste an indented list or Markdown to create a branch |
@@ -60,7 +62,7 @@ A mind-map tool that runs entirely in your browser. One HTML file, no build step
 | FreeMind (`.mm`) | Yes | Yes |
 | OPML | Yes | Yes |
 | Markdown | Yes | Yes |
-| CSV | Yes: one row per parent and child, with task Open or Closed | No |
+| CSV | Yes: one row per parent and child, with task Open or Closed and the assignee | No |
 | draw.io | Yes, editable in diagrams.net | No |
 | SVG and PNG | Yes | No |
 
@@ -79,7 +81,7 @@ To use your own Dropbox app instead:
 Google Drive is not supported yet.
 
 ## Keyboard shortcuts
-`Tab` child · `Enter` sibling · `F2` edit · `Space` collapse · `T` task · `X` done · `/` search · `Ctrl+K` commands · `Ctrl+Z` undo · `?` full list
+`Tab` child · `Enter` sibling · `F2` edit · `Space` collapse · `T` task · `X` done · `M` change parent · `/` search · `Ctrl+K` commands · `Ctrl+Z` undo · `?` full list
 
 ## Host your own copy
 1. Put these files in a GitHub repo.
