@@ -6,6 +6,18 @@ A mind-map tool that runs entirely in your browser. One HTML file, no build step
 
 ![Simple Mind Map in action](docs/demo.gif)
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Main view with outline and details](docs/main.png)<br>**Map, outline and details** | ![Level filter set to 2](docs/levels.png)<br>**Level filter** (showing levels 1 and 2) |
+| ![Version history](docs/versions.png)<br>**Version history** with restore and compare | ![Edit JSON dialog](docs/json.png)<br>**Edit JSON** with find and replace |
+| ![Export formats](docs/export.png)<br>**Export** to FreeMind, OPML, CSV, draw.io and more | ![Dark theme](docs/dark.png)<br>**Dark theme** (follows your device) |
+
+**On a phone**
+
+<img src="docs/phone.png" width="240" alt="Phone view"> <img src="docs/phone-outline.png" width="240" alt="Phone outline drawer">
+
 ## Features
 
 ### Edit and navigate
