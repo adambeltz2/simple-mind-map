@@ -167,6 +167,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
     <button class="ib bd" id="btnRedo" aria-label="Redo" data-ic="redo"></button>
     <button class="btn" id="btnExpand">Expand all</button>
     <button class="btn" id="btnCollapse">Collapse all</button>
+    <button class="btn" id="btnSel" aria-pressed="false" title="Multi-select: tap nodes or drag a box (or hold Shift)"><span data-ic="check" data-s="16"></span><span id="btnSelL">Select</span></button>
     <button class="btn" id="btnTask"><span data-ic="check" data-s="16"></span><span id="btnTaskL">Task</span></button>
     <button class="btn" id="btnFocus"><span data-ic="target" data-s="16"></span>Focus branch</button>
     <button class="ib bd" id="btnTogO" aria-label="Show or hide outline" data-ic="list"></button>
@@ -199,7 +200,7 @@ textarea.in{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;f
 <dialog id="pal"><div class="db"><input class="in" id="palIn" placeholder="Type a command" aria-label="Command"><div class="res" id="palRes" role="listbox"></div></div></dialog>
 
 <script>
-const APP_VERSION='1.9.0';
+const APP_VERSION='1.10.0';
 const DEFAULT_DBX_KEY='pigx740dqsduog8'; // public PKCE app key (no secret)
 'use strict';
 /* ============================================================
@@ -260,7 +261,7 @@ const curTheme=()=>document.documentElement.dataset.theme==='dark'?'dark':'light
 
 /* ---------------- state ---------------- */
 const S={
- map:null, idx:new Map(), sel:null, level:null, layout:'both', q:'', tag:'', asg:'', focus:null,
+ map:null, idx:new Map(), sel:null, level:null, layout:'both', q:'', tag:'', asg:'', multi:new Set(), selMode:false, focus:null,
  view:{x:0,y:0,k:1}, editing:null, undo:[], redo:[], lay:null, clip:null,
  maps:[], set:{theme:'auto',dbxKey:'',autoSync:true,autoBackup:false,lastBackup:0,outline:true,insp:true},
  sync:{state:'off',msg:'',last:0}, lastSnap:null, matches:[], matchPos:-1, lastNewId:null
@@ -281,6 +282,19 @@ function pathTo(id){const out=[];let x=N(id);while(x){out.unshift(x.n);x=x.p?N(x
 function cloneTree(n,fresh=true){return {...structuredClone({...n,c:undefined}),id:fresh?uid():n.id,c:n.c.map(c=>cloneTree(c,fresh))}}
 function walk(n,fn,d=0,p=null){fn(n,d,p);n.c.forEach(c=>walk(c,fn,d+1,n))}
 function taskProgress(n){let done=0,total=0;(function w(x,top){if(!top&&x.k!==undefined){total++;if(x.k)done++}x.c.forEach(c=>w(c,false))})(n,true);return total?{done,total}:null}
+function multiTops(){ // selected nodes whose ancestors are not also selected (never the root)
+  if(!S.multi.size)return [];
+  const ids=[...S.multi].filter(id=>N(id)&&N(id).p);
+  return ids.filter(id=>!ids.some(o=>o!==id&&isAnc(o,id)));
+}
+const hasMulti=()=>S.multi.size>1;
+function clearMulti(){if(S.multi.size){S.multi.clear();renderMap();renderBar()}}
+function toggleMulti(id){
+  if(!S.multi.size&&!S.selMode&&S.sel&&S.sel!==id&&N(S.sel)&&N(S.sel).p)S.multi.add(S.sel);
+  if(S.multi.has(id))S.multi.delete(id);else S.multi.add(id);
+  if(S.multi.size<=1&&!S.selMode){const only=[...S.multi][0];S.multi.clear();if(only)S.sel=only}
+  S.sel=id;renderMap();renderOutline();renderInsp();renderBar();
+}
 function allAssignees(){const s=new Set();walk(S.map.root,n=>{if(n.a)s.add(n.a)});return [...s].sort((a,b)=>a.localeCompare(b))}
 function allTags(){const s=new Set();walk(S.map.root,n=>(n.tg||[]).forEach(t=>s.add(t)));return [...s].sort()}
 const maxDepth=()=>{let m=0;walk(S.map.root,(n,d)=>{m=Math.max(m,d)});return m};
@@ -417,10 +431,11 @@ function edgePath(a,b){
 function nodeSVG(it,P,o){
   const n=it.n,root=it.d===0,[bg,bd]=root?[P.rootBg,P.rootBg]:P.c[it.ci%8];
   const fg=root?P.rootFg:P.ink,done=n.k===true;
-  const sel=o.sel===n.id,m=o.matches&&o.matches.has(n.id),dim=o.keep&&!o.keep.has(n.id);
+  const sel=o.sel===n.id,ms=o.multi&&o.multi.has(n.id),m=o.matches&&o.matches.has(n.id),dim=o.keep&&!o.keep.has(n.id);
   const wt=it.d<=1?600:500,rx=root?it.h/2:8;
   let s=`<g class="nd" data-id="${n.id}" transform="translate(${it.x},${it.y})"${dim?' opacity=".28"':''}>`;
   if(sel)s+=`<rect x="-4" y="-4" width="${it.w+8}" height="${it.h+8}" rx="${rx+4}" fill="none" stroke="${P.acc}" stroke-width="2.5"/>`;
+  if(ms)s+=`<rect x="-5" y="-5" width="${it.w+10}" height="${it.h+10}" rx="${rx+5}" fill="${P.acc}" fill-opacity=".14" stroke="${P.acc}" stroke-width="2.5" stroke-dasharray="6 4"/>`;
   if(m)s+=`<rect x="-3" y="-3" width="${it.w+6}" height="${it.h+6}" rx="${rx+3}" fill="none" stroke="#E0A800" stroke-width="3"/>`;
   s+=`<rect class="main" width="${it.w}" height="${it.h}" rx="${rx}" fill="${bg}" stroke="${bd}" stroke-width="1.5"/>`;
   let tx=PADX;
@@ -475,7 +490,7 @@ function viewRoot(){return S.focus&&N(S.focus)?N(S.focus).n:S.map.root}
 function renderMap(){
   const lay=S.lay=computeLayout(viewRoot(),{level:S.level,mode:S.layout});
   const P=PAL[curTheme()],f=S.filt=filterSets();
-  const o={sel:S.sel,matches:f.matches,keep:f.keep,hideTextFor:S.editing&&S.editing.id};
+  const o={sel:S.sel,multi:S.multi.size>1||S.selMode?S.multi:null,matches:f.matches,keep:f.keep,hideTextFor:S.editing&&S.editing.id};
   $('#vp').innerHTML=edgesSVG(lay,P,f.keep)+lay.items.map(it=>nodeSVG(it,P,o)).join('');
   S.matches=f.list;
   $('#qcount').textContent=S.q.trim()?(f.list.length?(Math.max(S.matchPos,0)+1)+'/'+f.list.length:'0'):'';
@@ -609,6 +624,7 @@ function renderBar(){
    el.innerHTML='<option value="">All people</option>'+as.map(t=>`<option value="${esc(t)}"${t===S.asg?' selected':''}>${esc(t)}</option>`).join('')+'<option value="\u0000"'+(S.asg==='\u0000'?' selected':'')+'>Unassigned</option>'}
   $('#tagSel').innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option${t===S.tag?' selected':''}>${esc(t)}</option>`).join('');
   $('#btnUndo').disabled=!S.undo.length;$('#btnRedo').disabled=!S.redo.length;
+  {const b=$('#btnSel');b.setAttribute('aria-pressed',S.selMode);b.style.background=S.selMode?'var(--acc)':'';b.style.color=S.selMode?'#fff':'';$('#btnSelL').textContent=S.multi.size>1?'Selected ('+S.multi.size+')':'Select'}
   {const sn=selNode();$('#btnTaskL').textContent=sn&&sn.n.k!==undefined?'Remove task':'Make task'}
   $('#btnFocus').innerHTML=ic('target',16)+(S.focus?'Exit focus':'Focus branch');
   const path=pathTo(S.focus||S.sel||S.map.root.id).map(n=>n.t||'(empty)');
@@ -620,7 +636,7 @@ function renderBar(){
   renderSync();
 }
 function render(){
-  buildIndex();if(!S.sel||!N(S.sel))S.sel=S.map.root.id;if(S.focus&&!N(S.focus))S.focus=null;
+  buildIndex();if(!S.sel||!N(S.sel))S.sel=S.map.root.id;[...S.multi].forEach(i=>{if(!N(i))S.multi.delete(i)});if(S.focus&&!N(S.focus))S.focus=null;
   renderMap();renderOutline();renderInsp();renderBar();
 }
 function select(id,o={}){
@@ -687,6 +703,7 @@ const cmd={
   addSibling(before=false){const id=S.sel;let nid;commit(()=>{const n=opAddSibling(id,before===true);nid=n.id;S.sel=nid});startEdit(nid,true)},
   edit(){startEdit(S.sel)},
   del(){
+    if(hasMulti()){const tops=multiTops(),n=tops.length;if(!n)return;const pid=N(tops[0]).p.id;commit(()=>{tops.forEach(id=>{opDelete(id);buildIndex()});S.sel=pid;S.multi.clear()});toast('Deleted '+n+' selected','Undo',undo);return}
     const x=selNode();if(!x||!x.p){toast('The root can’t be deleted');return}
     const label=x.n.t||'(empty)',cnt=countNodes(x.n),pid=x.p.id;
     commit(()=>{opDelete(x.n.id);S.sel=pid});
@@ -705,6 +722,8 @@ const cmd={
   fit(){fitView(true)},
   zoomIn(){zoomAt(1.2)},zoomOut(){zoomAt(1/1.2)},zoomReset(){const r=stageRect();zoomAt(1/S.view.k,r.width/2,r.height/2)},
   undo,redo,
+  selMode(){S.selMode=!S.selMode;if(!S.selMode&&S.multi.size<2)S.multi.clear();renderMap();renderBar();toast(S.selMode?'Select mode: tap nodes or drag a box':'Select mode off')},
+  clearSel(){S.selMode=false;S.multi.clear();renderMap();renderBar()},
   moveTo(){openMove()},
   resetPos(all){const x=selNode();if(!x)return;commit(()=>{const w=n=>{delete n.ox;delete n.oy;n.c.forEach(w)};if(all===true)w(S.map.root);else{delete x.n.ox;delete x.n.oy}});toast(all===true?'All positions reset':'Position reset')},
   task(){const x=selNode();if(!x)return;const id=x.n.id,on=x.n.k===undefined;commit(()=>{const n=N(id).n;if(on)n.k=false;else delete n.k});toast(on?'Marked as task':'Task removed')},
@@ -738,6 +757,25 @@ function toggleCollapse(id){cmd.toggle(id)}
 const svgEl=$('#svg'),ptrs=new Map();
 let drag=null,pinch=null,lastTap={id:null,t:0},lpTimer=null,ghost=null,dropId=null;
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+let marq=null;
+function drawMarquee(d,e){
+  if(!marq){marq=document.createElement('div');marq.style.cssText='position:fixed;z-index:48;border:2px dashed var(--acc);background:rgba(37,99,235,.10);pointer-events:none;border-radius:4px';document.body.appendChild(marq)}
+  const x=Math.min(d.sx,e.clientX),y=Math.min(d.sy,e.clientY);
+  marq.style.left=x+'px';marq.style.top=y+'px';marq.style.width=Math.abs(e.clientX-d.sx)+'px';marq.style.height=Math.abs(e.clientY-d.sy)+'px';
+}
+function endMarquee(d,e,cancel){
+  if(marq){marq.remove();marq=null}
+  if(cancel)return;
+  const r=stageRect(),k=S.view.k,w=(cx,cy)=>[(cx-r.left-S.view.x)/k,(cy-r.top-S.view.y)/k];
+  const [x1,y1]=w(Math.min(d.sx,e.clientX),Math.min(d.sy,e.clientY)),[x2,y2]=w(Math.max(d.sx,e.clientX),Math.max(d.sy,e.clientY));
+  const hit=S.lay.items.filter(it=>it.d>0&&it.x<x2&&it.x+it.w>x1&&it.y<y2&&it.y+it.h>y1).map(it=>it.n.id);
+  if(!d.mod&&!S.selMode)S.multi.clear();
+  hit.forEach(id=>S.multi.add(id));
+  if(S.multi.size)S.sel=[...S.multi][S.multi.size-1];
+  if(S.multi.size<2&&!S.selMode){const o=[...S.multi][0];S.multi.clear();if(o)S.sel=o}
+  renderMap();renderOutline();renderInsp();renderBar();
+  if(S.multi.size>1)toast(S.multi.size+' selected. Drag one to move them all, M to re-parent, Del to delete.');
+}
 let dropMode='in',dropLine=null;
 function setDrop(id,mode='in'){
   if(dropId!==id){
@@ -757,16 +795,17 @@ function setDrop(id,mode='in'){
 function startGhost(id){
   ghost=document.createElement('div');
   ghost.style.cssText='position:fixed;z-index:50;pointer-events:none;padding:6px 12px;border-radius:8px;background:var(--surf);border:2px solid var(--acc);box-shadow:var(--shadow);font-size:13px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  ghost.textContent=N(id).n.t||'(empty)';ghost.dataset.t=ghost.textContent;document.body.appendChild(ghost);
+  ghost.textContent=hasMulti()&&S.multi.has(id)?multiTops().length+' nodes selected':(N(id).n.t||'(empty)');ghost.dataset.t=ghost.textContent;document.body.appendChild(ghost);
 }
 function moveGhost(e){
   if(!ghost)return;
   ghost.style.left=(e.clientX+14)+'px';ghost.style.top=(e.clientY+14)+'px';
   const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest&&el.closest('#vp [data-id]');
   const id=g&&g.dataset.id;
-  if(id&&id!==drag.id&&!isAnc(drag.id,id)){
+  const tops=hasMulti()&&S.multi.has(drag.id)?multiTops():[drag.id];
+  if(id&&!tops.some(t=>isAnc(t,id))){
     const t=N(id),m=g.querySelector('.main')||g,r=m.getBoundingClientRect(),f=(e.clientY-r.top)/Math.max(1,r.height);
-    let mode='in';if(t.p){if(f<0.28)mode='before';else if(f>0.72)mode='after'}
+    let mode='in';if(t.p&&tops.length===1){if(f<0.28)mode='before';else if(f>0.72)mode='after'}
     setDrop(id,mode);
     const nm=(t.n.t||'(empty)').slice(0,24);
     ghost.textContent=(mode==='in'?'↳ Child of ':mode==='before'?'↑ Before ':'↓ After ')+nm;
@@ -774,6 +813,12 @@ function moveGhost(e){
 }
 function endGhost(doDrop,srcId,dx,dy){
   const target=dropId,mode=dropMode;setDrop(null);
+  if(doDrop&&hasMulti()&&S.multi.has(srcId)){
+    const tops=multiTops();if(ghost){ghost.remove();ghost=null}
+    if(!target){if(dx!=null&&commit(()=>{tops.forEach(id=>{const n=N(id).n;n.ox=Math.round((n.ox||0)+dx);n.oy=Math.round((n.oy||0)+dy);if(!n.ox)delete n.ox;if(!n.oy)delete n.oy})}))toast('Moved '+tops.length+' branches','Undo',undo);return}
+    let c=0;if(commit(()=>{tops.forEach(id=>{if(opMove(id,target))c++;buildIndex()})})){renderMap();toast('Moved '+c+' branches under “'+(N(target).n.t||'(empty)').slice(0,30)+'”','Undo',undo)}
+    return;
+  }
   if(ghost){ghost.remove();ghost=null}
   if(doDrop&&!target&&srcId&&dx!=null){
     if(commit(()=>{const n=N(srcId).n;n.ox=Math.round((n.ox||0)+dx);n.oy=Math.round((n.oy||0)+dy);if(!n.ox)delete n.ox;if(!n.oy)delete n.oy})){S.sel=srcId;select(srcId);toast('Placed. Drop on a node to re-parent.','Undo',undo)}
@@ -796,7 +841,8 @@ svgEl.addEventListener('pointerdown',e=>{
   svgEl.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:dist(a,b),k:S.view.k,vx:S.view.x,vy:S.view.y,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};clearTimeout(lpTimer);if(drag&&drag.mode==='node')endGhost(false);drag=null;return}
   const tg=e.target.closest('[data-tog]'),ck=e.target.closest('[data-chk]'),nd=e.target.closest('[data-id]');
-  drag={id:nd?nd.dataset.id:null,tog:tg&&tg.dataset.tog,chk:ck&&ck.dataset.chk,sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false,mode:nd&&!tg&&!ck?'node':'pan'};
+  drag={id:nd?nd.dataset.id:null,tog:tg&&tg.dataset.tog,chk:ck&&ck.dataset.chk,sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false,mode:nd&&!tg&&!ck?'node':'pan',mod:e.shiftKey||e.ctrlKey||e.metaKey};
+  if(!nd&&(e.shiftKey||S.selMode)&&e.pointerType!=='touch'||!nd&&S.selMode)drag.mode='marquee';
   clearTimeout(lpTimer);
   if(drag.mode==='node'&&e.pointerType==='touch'){const px=e.clientX,py=e.clientY,id=drag.id;lpTimer=setTimeout(()=>{if(drag&&!drag.moved){drag.consumed=true;select(id);openNodeMenu(px,py)}},550)}
 });
@@ -812,22 +858,24 @@ svgEl.addEventListener('pointermove',e=>{
   const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(!drag.moved&&Math.hypot(dx,dy)>6){
     drag.moved=true;clearTimeout(lpTimer);
-    if(drag.mode==='node'){const x=N(drag.id);if(!x||!x.p||drag.id===viewRoot().id)drag.mode='pan';else startGhost(drag.id)}
+    if(drag.mode==='node'){const x=N(drag.id);if(!x||!x.p||drag.id===viewRoot().id)drag.mode='pan';else{if(drag.mod){}else if(!(S.multi.has(drag.id)&&hasMulti())){if(S.multi.size&&!S.selMode)S.multi.clear()}startGhost(drag.id)}}
     svgEl.classList.add('pan');
   }
   if(!drag.moved)return;
-  if(drag.mode==='pan'){S.view.x=drag.vx+dx;S.view.y=drag.vy+dy;applyView()}else moveGhost(e);
+  if(drag.mode==='pan'){S.view.x=drag.vx+dx;S.view.y=drag.vy+dy;applyView()}else if(drag.mode==='marquee')drawMarquee(drag,e);else moveGhost(e);
 });
 function endPtr(e,cancel){
   ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
   if(!drag)return;
   clearTimeout(lpTimer);const d=drag;drag=null;svgEl.classList.remove('pan');
   if(d.consumed){return}
-  if(d.moved){if(d.mode==='node')endGhost(!cancel,d.id,(e.clientX-d.sx)/S.view.k,(e.clientY-d.sy)/S.view.k);return}
+  if(d.moved){if(d.mode==='marquee'){endMarquee(d,e,cancel)}else if(d.mode==='node')endGhost(!cancel,d.id,(e.clientX-d.sx)/S.view.k,(e.clientY-d.sy)/S.view.k);return}
   if(cancel)return;
   if(d.tog){toggleCollapse(d.tog);return}
   if(d.chk){commit(()=>{const n=N(d.chk).n;n.k=!n.k});return}
+  if(d.id&&(d.mod||S.selMode)){toggleMulti(d.id);return}
   if(d.id){
+    if(S.multi.size){S.multi.clear()}
     const now=Date.now();
     if(lastTap.id===d.id&&now-lastTap.t<350){lastTap={id:null,t:0};select(d.id);startEdit(d.id)}
     else{lastTap={id:d.id,t:now};select(d.id)}
@@ -837,7 +885,7 @@ svgEl.addEventListener('pointerup',e=>endPtr(e,false));
 svgEl.addEventListener('pointercancel',e=>endPtr(e,true));
 svgEl.addEventListener('contextmenu',e=>{
   e.preventDefault();const nd=e.target.closest('[data-id]');
-  if(nd){select(nd.dataset.id);openNodeMenu(e.clientX,e.clientY)}
+  if(nd){if(!S.multi.has(nd.dataset.id))S.multi.clear();select(nd.dataset.id);openNodeMenu(e.clientX,e.clientY)}
 });
 svgEl.addEventListener('dblclick',e=>{
   if(e.target.closest('[data-id]'))return; // handled by tap logic
@@ -915,7 +963,7 @@ document.addEventListener('keydown',e=>{
     case '+':case '=':cmd.zoomIn();break;
     case '-':cmd.zoomOut();break;
     case '0':cmd.fit();break;
-    case 'Escape':if(S.focus){cmd.focus()}else if(S.q){S.q='';$('#q').value='';renderMap();renderOutline()}break;
+    case 'Escape':if(S.multi.size||S.selMode){cmd.clearSel()}else if(S.focus){cmd.focus()}else if(S.q){S.q='';$('#q').value='';renderMap();renderOutline()}break;
   }
 });
 document.addEventListener('paste',e=>{
@@ -940,6 +988,7 @@ document.addEventListener('pointerdown',e=>{if(!$('#pop').contains(e.target))hid
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#pop').style.display==='block'){hidePop()}},true);
 function openNodeMenu(x,y){
   const n=selNode();if(!n)return;const root=!n.p;
+  if(hasMulti()){popMenu([{label:S.multi.size+' selected',disabled:true},{label:'Change parent…',key:'M',run:cmd.moveTo},{label:'Clear selection',key:'Esc',run:cmd.clearSel},'-',{label:'Delete selected',key:'Del',run:cmd.del,danger:true}],x,y);return}
   popMenu([
     {label:'Add child',key:'Tab',run:cmd.addChild},{label:'Add sibling',key:'Enter',run:()=>cmd.addSibling()},{label:'Edit text',key:'F2',run:cmd.edit},{label:'Change parent…',key:'M',run:cmd.moveTo,disabled:!n.p},{label:'Reset position',run:()=>cmd.resetPos(),disabled:!(n.n.ox||n.n.oy)},{label:n.n.k===undefined?'Make task':'Remove task',key:'T',run:cmd.task},{label:n.n.k===true?'Mark not done':'Mark done',key:'X',run:cmd.done},'-',
     {label:'Copy',key:'Ctrl+C',run:()=>cmd.copy()},{label:'Cut',key:'Ctrl+X',run:cmd.cut,disabled:root},{label:'Paste as children',key:'Ctrl+V',run:async()=>{let t=null;try{t=await navigator.clipboard.readText()}catch{}cmd.paste(t)}},{label:'Duplicate',key:'Ctrl+D',run:cmd.dup,disabled:root},'-',
@@ -1248,10 +1297,11 @@ function toCSV(map){
 /* ---------------- Change parent ---------------- */
 function openMove(){
   const x=S.sel&&N(S.sel);if(!x||!x.p){toast('Select a node that has a parent');return}
+  const tops=hasMulti()?multiTops():[x.n.id];if(!tops.length)return;
   const id=x.n.id,list=[];
-  (function w(n,d){list.push({n,d,bad:n.id===id||isAnc(id,n.id)});if(n.id!==id)n.c.forEach(c=>w(c,d+1))})(S.map.root,0);
+  (function w(n,d){list.push({n,d,bad:tops.some(t=>isAnc(t,n.id))});if(!tops.includes(n.id))n.c.forEach(c=>w(c,d+1))})(S.map.root,0);
   const cur=x.p.id;
-  modal('Change parent',`<div class="note">Move <b>${esc(x.n.t||'(empty)')}</b>${x.n.c.length?' and its '+x.n.c.length+' child'+(x.n.c.length>1?'ren':''):''} under:</div>
+  modal('Change parent',`<div class="note">Move <b>${tops.length>1?tops.length+' selected branches':esc(x.n.t||'(empty)')}</b>${tops.length===1&&x.n.c.length?' and its '+x.n.c.length+' child'+(x.n.c.length>1?'ren':''):''} under:</div>
    <input class="in" id="mvQ" placeholder="Search for the new parent" autocomplete="off" style="margin:8px 0">
    <div id="mvList" role="listbox" style="max-height:min(46vh,380px);overflow:auto;border:1px solid var(--line2);border-radius:8px"></div>
    <div class="row small" style="margin-top:8px"><label class="row" style="margin:0"><input type="checkbox" id="mvFirst"> Put it first among its new siblings</label></div>`,
@@ -1267,9 +1317,9 @@ function openMove(){
       const b=e.target.closest('[data-pid]');if(!b)return;
       const pid=b.dataset.pid,first=d.querySelector('#mvFirst').checked;
       let moved=false;
-      commit(()=>{moved=opMove(id,pid,first?0:null);return moved});
+      commit(()=>{tops.forEach((t,i)=>{if(opMove(t,pid,first?i:null))moved=true;buildIndex()})});
       d.close();
-      if(moved){S.sel=id;select(id,{reveal:true,center:true});toast('Moved under “'+((N(pid).n.t||'(empty)').slice(0,30))+'”','Undo',undo)}
+      if(moved){S.multi.clear();S.sel=id;select(id,{reveal:true,center:true});toast('Moved under “'+((N(pid).n.t||'(empty)').slice(0,30))+'”','Undo',undo)}
     });
     setTimeout(()=>q.focus(),50);
   }});
@@ -1796,7 +1846,7 @@ function commandList(){
   add('Add child','Tab',cmd.addChild);add('Add sibling','Enter',()=>cmd.addSibling());add('Edit text','F2',cmd.edit);
   add('Delete node','Del',cmd.del,root);add('Duplicate node','Ctrl+D',cmd.dup,root);
   add('Move up','Alt+↑',cmd.up,root);add('Move down','Alt+↓',cmd.down,root);add('Indent','Alt+→',cmd.indent,root);add('Outdent','Alt+←',cmd.outdent,root);
-  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Edit JSON','',openJSON);add('Change parent of selected node','M',cmd.moveTo);add('Toggle task','T',cmd.task);add('Reset position of selected node','',()=>cmd.resetPos());add('Reset all node positions','',()=>cmd.resetPos(true));add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
+  add('Collapse or expand','Space',()=>cmd.toggle());add('Expand all','',cmd.expandAll);add('Edit JSON','',openJSON);add('Change parent of selected node','M',cmd.moveTo);add('Multi-select mode','',cmd.selMode);add('Clear selection','',cmd.clearSel);add('Toggle task','T',cmd.task);add('Reset position of selected node','',()=>cmd.resetPos());add('Reset all node positions','',()=>cmd.resetPos(true));add('Toggle done','X',cmd.done);add('Collapse all','',cmd.collapseAll);
   [1,2,3,4].forEach(n=>add('Show '+n+(n===1?' level':' levels'),'',()=>cmd.setLevel(n)));add('Show all levels','',()=>cmd.setLevel(null));
   add(S.focus?'Exit focus':'Focus on this branch','',cmd.focus);add('Fit map to screen','0',cmd.fit);add('Zoom in','+',cmd.zoomIn);add('Zoom out','−',cmd.zoomOut);
   add('Undo','Ctrl+Z',undo);add('Redo','Ctrl+Y',redo);add('Search nodes','/',cmd.search);add('Next search match','',()=>jumpMatch(1));
@@ -1832,7 +1882,7 @@ $('#lay').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)
 $('#tagSel').addEventListener('change',e=>{S.tag=e.target.value;renderMap();renderOutline()});
 $('#asgSel').addEventListener('change',e=>{S.asg=e.target.value;renderMap();renderOutline()});
 $('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
-$('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;$('#btnTask').onclick=cmd.task;
+$('#btnExpand').onclick=cmd.expandAll;$('#btnCollapse').onclick=cmd.collapseAll;$('#btnFocus').onclick=cmd.focus;$('#btnTask').onclick=cmd.task;$('#btnSel').onclick=()=>cmd.selMode();
 $('#btnVersions').onclick=openVersions;$('#btnExport').onclick=openExport;$('#btnMaps').onclick=openMaps;
 $('#btnMore').onclick=e=>popAt(e.currentTarget,[
   {label:'New map',run:()=>createMap('blank')},{label:'Maps…',run:openMaps},{label:'Import…',run:openImport},{label:'Export…',run:openExport},{label:'Edit JSON…',run:openJSON},'-',
